@@ -1,0 +1,65 @@
+.sc-entry {
+  margin-bottom: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  font-family: sans-serif;
+  color: #fff;
+}
+
+.sc-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  height: 40px;
+}
+
+.sc-entry-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.sc-entry-header-left-avatar .avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  margin-right: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.sc-entry-header-left-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.sc-entry-header-left-name .sender {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.sc-entry-header-right {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.sc-entry-content {
+  padding: 8px;
+  font-size: 14px;
+}
+
+.sc-entry-content-time {
+  font-size: 12px;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
+/* SuperChat Levels */
+:root {
+  --sc-b-level-0: #2a60b2; --sc-f-level-0: #3772cc;
+  --sc-b-level-1: #427d9e; --sc-f-level-1: #5296ba;
+  --sc-b-level-2: #e2a842; --sc-f-level-2: #f2c060;
+  --sc-b-level-3: #e57d36; --sc-f-level-3: #f59654;
+  --sc-b-level-4: #e54d4d; --sc-f-level-4: #f76868;
+  --sc-b-level-5: #ab1a32; --sc-f-level-5: #c42742;
+}
