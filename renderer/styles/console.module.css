@@ -143,14 +143,14 @@
 .danmu-item {
   margin-bottom: 8px;
   line-height: 1.6;
-  font-size: 16px;
+  font-size: 1.15em; /* Relative to container font-size */
   word-break: break-all;
   animation: fadeIn 0.2s ease-out;
 }
 
 .danmu-interact {
   margin-bottom: 6px;
-  font-size: 14px;
+  font-size: 0.9em;
   color: var(--text-secondary);
   opacity: 0.8;
   padding-left: 4px;
@@ -159,7 +159,7 @@
 
 .danmu-system {
   margin: 10px 0;
-  font-size: 14px;
+  font-size: 0.9em;
   color: var(--text-secondary);
   text-align: center;
   position: relative;
@@ -245,7 +245,7 @@
 
 .sc-body {
   padding: 10px 12px;
-  font-size: 15px;
+  font-size: 1.1em;
   color: var(--text-primary);
   background-color: rgba(0,0,0,0.02);
 }
@@ -279,12 +279,12 @@
 .gift-row-top {
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: 0.9em;
   margin-bottom: 4px;
 }
 
 .gift-row-bot {
-  font-size: 14px;
+  font-size: 1em;
   display: flex;
   align-items: center;
 }

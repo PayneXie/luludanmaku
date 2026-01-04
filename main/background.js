@@ -1,5 +1,5 @@
 import path from 'path'
-import { app, ipcMain, Menu } from 'electron'
+import { app, ipcMain, Menu, BrowserWindow } from 'electron'
 import serve from 'electron-serve'
 import { createWindow } from './helpers'
 import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo } from './lib/bilibili_login'
@@ -414,4 +414,11 @@ ipcMain.handle('bilibili-get-gift-config', async (event, { roomId }) => {
     console.error('Failed to get gift config:', error)
     return { success: false, error: error.message || error }
   }
+})
+
+ipcMain.on('window-set-always-on-top', (event, flag) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win) {
+        win.setAlwaysOnTop(flag)
+    }
 })

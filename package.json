@@ -1,9 +1,9 @@
 {
   "private": true,
-  "name": "my-nextron-app",
-  "description": "My application description",
-  "version": "1.0.0",
-  "author": "Yoshihide Shiono <shiono.yoshihide@gmail.com>",
+  "name": "luludanmaku",
+  "description": "lulu专用弹幕姬",
+  "version": "1.0.1",
+  "author": "Payne <payne9586@gmail.com>",
   "main": "app/background.js",
   "scripts": {
     "dev": "nextron",
