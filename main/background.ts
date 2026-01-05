@@ -2,7 +2,7 @@ import path from 'path'
 import { app, ipcMain, Menu, BrowserWindow, shell } from 'electron'
 import serve from 'electron-serve'
 import { createWindow } from './helpers'
-import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo, BiliCookies } from './lib/bilibili_login'
+import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo, BiliCookies, GetUserInfo, GetRoomInfo, GetSilentUserList, AddSilentUser } from './lib/bilibili_login'
 import { BiliWebSocket, WsInfo, PackResult } from './lib/bilibili_socket'
 
 const isProd = process.env.NODE_ENV === 'production'
@@ -463,4 +463,46 @@ ipcMain.on('window-set-always-on-top', (event, flag) => {
 
 ipcMain.on('open-external', (event, url) => {
     shell.openExternal(url)
+})
+
+ipcMain.handle('bilibili-get-room-info', async (event, roomId: number) => {
+  try {
+    const result = await GetRoomInfo(roomId)
+    return { success: true, data: result }
+  } catch (error: any) {
+    console.error('Failed to get room info:', error)
+    return { success: false, error: error.message || error }
+  }
+})
+
+ipcMain.handle('bilibili-get-silent-users', async (event, { cookies, roomId }) => {
+  try {
+    console.log('--- Checking Admin Status ---')
+    const result = await GetSilentUserList(cookies, roomId)
+    console.log(`Admin Check Result: Code ${result.code} (${result.code === 0 ? 'Is Admin' : 'Not Admin'})`)
+    return { success: true, data: result }
+  } catch (error: any) {
+    console.error('Failed to check admin status:', error)
+    return { success: false, error: error.message || error }
+  }
+})
+
+ipcMain.handle('bilibili-add-silent-user', async (event, { cookies, roomId, targetUid, hour }) => {
+  try {
+    const result = await AddSilentUser(cookies, roomId, targetUid, hour)
+    return { success: true, data: result }
+  } catch (error: any) {
+    console.error('Failed to add silent user:', error)
+    return { success: false, error: error.message || error }
+  }
+})
+
+ipcMain.handle('bilibili-get-user-info', async (event, cookies: BiliCookies) => {
+  try {
+    const result = await GetUserInfo(cookies)
+    return { success: true, data: result }
+  } catch (error: any) {
+    console.error('Failed to get user info:', error)
+    return { success: false, error: error.message || error }
+  }
 })

@@ -13,6 +13,7 @@ import roomSelectStyles from '@/styles/room-select.module.css' // 引入房间�
 import DebugPanel from '@/components/DebugPanel' // 引入调试面板
 import UserActionMenu from '@/components/UserActionMenu' // 引入用户操作菜单
 import Linkify from '@/components/Linkify' // 引入链接识别组件
+import LiveTimer from '@/components/LiveTimer' // 引入直播计时组件
 
 import level1 from '../public/images/level1.png'
 import level2 from '../public/images/level2.png'
@@ -30,6 +31,66 @@ export default function HomePage() {
   const [danmuList, setDanmuList] = useState([])
   const danmuListRef = useRef(null)
   
+  // 房间信息（标题、状态等）
+  const [roomInfo, setRoomInfo] = useState(null)
+  const roomInfoTimer = useRef(null)
+  
+  // 是否是当前房间管理员
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  const fetchRoomInfo = async (rid) => {
+      try {
+          const res = await window.ipc.invoke('bilibili-get-room-info', Number(rid))
+          if (res.success) {
+              setRoomInfo(res.data)
+          }
+      } catch (e) {
+          console.error('Failed to fetch room info', e)
+      }
+  }
+  
+  const getLiveStartMoment = (time) => {
+      if (typeof time === 'string') return moment(time)
+      return moment.unix(time)
+  }
+  
+  const shouldShowItem = (item) => {
+      // 如果没有关键词，全部显示
+      if (!danmuFilter.keyword) return true
+      
+      const kw = danmuFilter.keyword.toLowerCase()
+      
+      // 系统消息
+      if (item.type === 'system') {
+           return item.data.toLowerCase().includes(kw)
+      }
+      
+      let uname = '', content = '', uid = ''
+      
+      if (item.type === 'msg' || item.type === 'danmu') {
+          uname = item.data.sender?.uname || ''
+          content = item.data.content || ''
+          uid = String(item.data.sender?.uid || '')
+      } else if (item.type === 'superchat') {
+          uname = item.data.sender?.uname || ''
+          content = item.data.message || ''
+          uid = String(item.data.sender?.uid || '')
+      } else if (item.type === 'gift') {
+          uname = item.data.sender?.uname || ''
+          content = item.data.gift_info?.name || ''
+          uid = String(item.data.sender?.uid || '')
+      } else {
+          return true
+      }
+      
+      let match = false
+      if (danmuFilter.enableUser && uname.toLowerCase().includes(kw)) match = true
+      if (danmuFilter.enableContent && content.toLowerCase().includes(kw)) match = true
+      if (danmuFilter.enableUid && uid === kw) match = true
+      
+      return match
+  }
+
   // 礼物配置缓存
   const [giftMap, setGiftMap] = useState({}) 
   // 礼物过滤器
@@ -100,6 +161,37 @@ export default function HomePage() {
           }
           return newSet
       })
+      setSelectedUser(null)
+  }
+
+  const handleMuteUser = async (targetUser, hour) => {
+      try {
+          if (!userInfo || !userInfo.SESSDATA) {
+              addSystemMessage('禁言失败: 未登录')
+              return
+          }
+          const res = await window.ipc.invoke('bilibili-add-silent-user', {
+              cookies: userInfo,
+              roomId: Number(roomId),
+              targetUid: targetUser.uid,
+              hour: hour
+          })
+          
+          let durationLabel = `${hour}小时`
+          if (hour === 0) durationLabel = '本场直播'
+          if (hour === -1) durationLabel = '永久'
+          if (hour === 168) durationLabel = '7天'
+          if (hour === 720) durationLabel = '30天'
+          
+          if (res.success && res.data.code === 0) {
+              addSystemMessage(`已禁言用户 ${targetUser.uname} (${durationLabel})`)
+          } else {
+              addSystemMessage(`禁言失败: ${res.data?.message || res.error}`)
+          }
+      } catch (e) {
+          console.error(e)
+          addSystemMessage('禁言操作出错')
+      }
       setSelectedUser(null)
   }
 
@@ -253,6 +345,10 @@ export default function HomePage() {
       clearInterval(pollTimer.current)
       pollTimer.current = null
     }
+    if (roomInfoTimer.current) {
+        clearInterval(roomInfoTimer.current)
+        roomInfoTimer.current = null
+    }
   }
 
   const disconnectDanmu = () => {
@@ -363,6 +459,24 @@ export default function HomePage() {
       
       setDanmuStatus('Connected (Main Process)')
       
+      // 获取并监控房间信息
+      fetchRoomInfo(roomId)
+      if (roomInfoTimer.current) clearInterval(roomInfoTimer.current)
+      roomInfoTimer.current = setInterval(() => fetchRoomInfo(roomId), 60000)
+
+      // 尝试获取禁言用户列表 (仅打印日志) -> 现用于判断是否为管理员
+      if (userInfo && userInfo.SESSDATA) {
+          window.ipc.invoke('bilibili-get-silent-users', { cookies: userInfo, roomId: Number(roomId) })
+              .then(res => {
+                  if (res.success && res.data && res.data.code === 0) {
+                      setIsAdmin(true)
+                  } else {
+                      setIsAdmin(false)
+                  }
+              })
+              .catch(err => console.error('Failed to invoke get-silent-users:', err))
+      }
+      
       addSystemMessage('弹幕已加载…')
 
     } catch (e) {
@@ -371,6 +485,25 @@ export default function HomePage() {
       setDanmuStatus(errText)
       addSystemMessage(errText)
     }
+  }
+
+  const fetchUserInfo = async (cookies) => {
+      try {
+          const res = await window.ipc.invoke('bilibili-get-user-info', cookies)
+          if (res.success) {
+              setUserInfo(prev => ({
+                  ...prev,
+                  ...cookies,
+                  uname: res.data.uname,
+                  face: res.data.face,
+                  mid: res.data.mid
+              }))
+          } else {
+              console.error('Failed to fetch user info:', res.error)
+          }
+      } catch (e) {
+          console.error('IPC error fetching user info:', e)
+      }
   }
 
   const initLogin = async () => {
@@ -393,6 +526,8 @@ export default function HomePage() {
             setStatus('登录成功！')
             setLoggedIn(true)
             setUserInfo(data.cookies)
+            // 获取详细用户信息
+            fetchUserInfo(data.cookies)
           } else if (data.status === QrCodeStatus.NeedConfirm) {
             setStatus('已扫码，请在手机上确认')
           } else if (data.status === QrCodeStatus.NeedScan) {
@@ -503,10 +638,71 @@ export default function HomePage() {
           >
               {/* 头部 */}
               <div className={styles['console-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px' }}>
-                  <div className={styles['room-info']} style={{ display: 'flex', flexDirection: 'column' }}>
-                      <strong style={{ fontSize: '14px' }}>直播间: {roomId}</strong>
-                      <span style={{ fontSize: '12px', color: '#888' }}>用户: {userInfo?.DedeUserID}</span>
+                  <div className={styles['room-info']} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      {/* 用户头像 */}
+                      {userInfo?.face && (
+                          <img 
+                              src={userInfo.face} 
+                              alt="avatar" 
+                              style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} 
+                          />
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <strong style={{ fontSize: '14px' }}>直播间: {roomId}</strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '12px', color: '#888' }}>
+                                  用户: {userInfo?.uname || userInfo?.DedeUserID}
+                              </span>
+                              {isAdmin && (
+                                  <span style={{ 
+                                      fontSize: '10px', color: '#fff', backgroundColor: '#fb7299', 
+                                      padding: '1px 4px', borderRadius: '4px', lineHeight: '12px' 
+                                  }}>
+                                      管理员
+                                  </span>
+                              )}
+                          </div>
+                      </div>
                   </div>
+
+                  {/* 直播间状态信息 */}
+                  {roomInfo && (
+                      <div style={{ flex: 1, marginLeft: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                          <div style={{ fontSize: '15px', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '400px', marginBottom: '4px' }} title={roomInfo.title}>
+                              {roomInfo.title}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              {roomInfo.live_status === 1 ? (
+                                  <>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                                          <span style={{ color: '#fff', backgroundColor: '#fb7299', padding: '0 4px', borderRadius: '2px', fontSize: '10px', lineHeight: '16px' }}>直播中</span>
+                                          {roomInfo.live_time && (
+                                              <span style={{ color: '#888' }}>
+                                                  {getLiveStartMoment(roomInfo.live_time).format('MM-DD HH:mm')} 开播
+                                              </span>
+                                          )}
+                                      </div>
+                                      
+                                      {roomInfo.live_time && (
+                                          <div style={{ 
+                                               display: 'flex', alignItems: 'center', gap: '8px', 
+                                               fontSize: '14px', fontWeight: 'bold', color: '#333',
+                                               backgroundColor: '#f6f7f8', padding: '4px 10px', borderRadius: '6px',
+                                               border: '1px solid #eee'
+                                           }}>
+                                               <span style={{ color: '#666', fontSize: '13px', fontWeight: 'normal' }}>直播时长</span>
+                                               <span style={{ fontFamily: '"HarmonyOS Sans", "Microsoft YaHei", sans-serif', fontVariantNumeric: 'tabular-nums', color: '#fb7299', fontSize: '16px' }}>
+                                                   <LiveTimer startTime={roomInfo.live_time} />
+                                               </span>
+                                           </div>
+                                      )}
+                                  </>
+                              ) : (
+                                  <span style={{ color: '#999', border: '1px solid #999', padding: '0 4px', borderRadius: '2px', fontSize: '10px', lineHeight: '14px' }}>未开播</span>
+                              )}
+                          </div>
+                      </div>
+                  )}
                   
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {/* 置顶按钮（图钉图标） */}
@@ -792,29 +988,7 @@ export default function HomePage() {
                               // Basic Type Filter
                               if (item.type !== 'msg' && item.type !== 'system') return false
                               
-                              // Advanced Filter
-                              if (danmuFilter.keyword) {
-                                  // Always show system messages? Or filter them too?
-                                  // Let's filter system messages by content only
-                                  const kw = danmuFilter.keyword.toLowerCase()
-                                  
-                                  if (item.type === 'system') {
-                                      return item.data && item.data.toLowerCase().includes(kw)
-                                  }
-                                  
-                                  if (item.type === 'msg') {
-                                      const msg = item.data
-                                      let match = false
-                                      
-                                      if (danmuFilter.enableUser && msg.sender.uname.toLowerCase().includes(kw)) match = true
-                                      if (danmuFilter.enableContent && msg.content.toLowerCase().includes(kw)) match = true
-                                      if (danmuFilter.enableUid && String(msg.sender.uid) === kw) match = true
-                                      
-                                      return match
-                                  }
-                              }
-                              
-                              return true
+                              return shouldShowItem(item)
                           }).slice().reverse().map(item => {
                               if (item.type === 'msg') {
                                   const msg = item.data
@@ -906,7 +1080,7 @@ export default function HomePage() {
                   >
                       <div className={styles['col-header']} style={{ color: 'var(--sc-level-4)' }}>醒目留言</div>
                       <div className={styles['col-content']}>
-                          {danmuList.filter(item => item.type === 'superchat').reverse().map(item => {
+                          {danmuList.filter(item => item.type === 'superchat' && shouldShowItem(item)).reverse().map(item => {
                               const msg = item.data
                               // Bilibili SC 颜色等级
                               // < 50: Dark Blue (Level 0)
@@ -1045,7 +1219,7 @@ export default function HomePage() {
                           </div>
                       </div>
                       <div className={styles['col-content']}>
-                          {danmuList.filter(item => item.type === 'gift').slice().reverse().map(item => {
+                          {danmuList.filter(item => item.type === 'gift' && shouldShowItem(item)).slice().reverse().map(item => {
                               const msg = item.data
                               
                               // Handle GuardMessage (Captain/Admiral/Governor)
@@ -1167,6 +1341,8 @@ export default function HomePage() {
                       onFilter={handleFilterUser}
                       onHighlight={handleHighlightUser}
                       isHighlighted={highlightedUsers.has(String(selectedUser.user.uid))}
+                      isAdmin={isAdmin}
+                      onMute={handleMuteUser}
                   />
               )}
           </div>
@@ -1183,8 +1359,17 @@ export default function HomePage() {
       <div className={roomSelectStyles.container}>
         <div className={roomSelectStyles.card}>
             <div className={roomSelectStyles.header}>
-                <div className={roomSelectStyles.welcome}>
-                    欢迎回来, <span className={roomSelectStyles.username}>{userInfo?.DedeUserID}</span>
+                <div className={roomSelectStyles.welcome} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                    {userInfo?.face && (
+                        <img 
+                            src={userInfo.face} 
+                            alt="avatar" 
+                            style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} 
+                        />
+                    )}
+                    <div>
+                        欢迎回来, <span className={roomSelectStyles.username}>{userInfo?.uname || userInfo?.DedeUserID}</span>
+                    </div>
                 </div>
                 <h2 className={roomSelectStyles.title}>请输入直播间 ID</h2>
             </div>

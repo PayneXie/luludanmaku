@@ -1,8 +1,19 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-const UserActionMenu = ({ user, position, onClose, onFilter, onHighlight, isHighlighted }) => {
+const UserActionMenu = ({ user, position, onClose, onFilter, onHighlight, isHighlighted, isAdmin, onMute }) => {
   const menuRef = useRef(null)
+  const [showMuteOptions, setShowMuteOptions] = useState(false)
+
+  const MUTE_OPTIONS = [
+    { label: '本场直播', value: 0 },
+    { label: '2 小时', value: 2 },
+    { label: '4 小时', value: 4 },
+    { label: '24 小时', value: 24 },
+    { label: '7 天', value: 168 },
+    { label: '30 天', value: 720 },
+    { label: '永久', value: -1 }
+  ]
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -42,65 +53,107 @@ const UserActionMenu = ({ user, position, onClose, onFilter, onHighlight, isHigh
         animation: 'fadeIn 0.1s ease-out'
       }}
     >
-      {/* Header: User Info */}
-      <div style={{ 
-          padding: '16px', 
-          display: 'flex', 
-          alignItems: 'center', 
-          borderBottom: '1px solid rgba(0,0,0,0.05)',
-          background: 'linear-gradient(to bottom, rgba(255,255,255,0.5), rgba(255,255,255,0.8))'
-      }}>
-        <img 
-          src={user.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
-          alt={user.uname}
-          style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid white', marginRight: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
-        />
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#333', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {user.uname}
+      {showMuteOptions ? (
+        <div style={{ padding: '8px 0' }}>
+          <div 
+            onClick={() => setShowMuteOptions(false)}
+            style={{ 
+                padding: '8px 16px', 
+                cursor: 'pointer', 
+                fontWeight: 'bold', 
+                borderBottom: '1px solid #eee',
+                marginBottom: '4px',
+                color: '#666',
+                fontSize: '14px'
+            }}
+          >
+              ← 返回
           </div>
-          <div style={{ fontSize: '12px', color: '#ff8e29' }}>
-            UID: {user.uid}
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+              {MUTE_OPTIONS.map(opt => (
+                  <MenuButton 
+                      key={opt.value} 
+                      label={opt.label} 
+                      onClick={() => {
+                          if (onMute) onMute(user, opt.value)
+                          onClose()
+                      }} 
+                  />
+              ))}
           </div>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Header: User Info */}
+          <div style={{ 
+              padding: '16px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              borderBottom: '1px solid rgba(0,0,0,0.05)',
+              background: 'linear-gradient(to bottom, rgba(255,255,255,0.5), rgba(255,255,255,0.8))'
+          }}>
+            <img 
+              src={user.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+              alt={user.uname}
+              style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid white', marginRight: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
+            />
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#333', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user.uname}
+              </div>
+              <div style={{ fontSize: '12px', color: '#ff8e29' }}>
+                UID: {user.uid}
+              </div>
+            </div>
+          </div>
 
-      {/* Action List */}
-      <div style={{ padding: '8px 0' }}>
-        <MenuButton 
-            icon="🔍" 
-            label="筛选此人" 
-            onClick={() => {
-                if (onFilter) onFilter(user)
-                onClose()
-            }} 
-        />
-        <MenuButton 
-            icon={isHighlighted ? "🌟" : "⭐"} 
-            label={isHighlighted ? "取消关注" : "重点关注"} 
-            onClick={() => {
-                if (onHighlight) onHighlight(user)
-                onClose()
-            }}
-            style={isHighlighted ? { color: '#ff8e29', fontWeight: 'bold', backgroundColor: 'rgba(255, 142, 41, 0.1)' } : {}}
-        />
-        
-        <div style={{ height: '1px', backgroundColor: 'rgba(0,0,0,0.05)', margin: '8px 16px' }}></div>
-        <div style={{ padding: '0 16px 8px 16px', fontSize: '12px', color: '#999' }}>外部功能</div>
-        
-        <MenuButton 
-            icon="🔗" 
-            label="哔哩哔哩空间..." 
-            onClick={() => {
-                const url = `https://space.bilibili.com/${user.uid}`
-                if (window.ipc) {
-                    window.ipc.send('open-external', url)
-                } else {
-                    window.open(url, '_blank')
-                }
-            }} 
-        />
-      </div>
+          {/* Action List */}
+          <div style={{ padding: '8px 0' }}>
+            <MenuButton 
+                icon="🔍" 
+                label="筛选此人" 
+                onClick={() => {
+                    if (onFilter) onFilter(user)
+                    onClose()
+                }} 
+            />
+            <MenuButton 
+                icon={isHighlighted ? "🌟" : "⭐"} 
+                label={isHighlighted ? "取消关注" : "重点关注"} 
+                onClick={() => {
+                    if (onHighlight) onHighlight(user)
+                    onClose()
+                }}
+                style={isHighlighted ? { color: '#ff8e29', fontWeight: 'bold', backgroundColor: 'rgba(255, 142, 41, 0.1)' } : {}}
+            />
+            
+            {isAdmin && (
+                <MenuButton 
+                    icon="🚫" 
+                    label="禁言" 
+                    onClick={() => setShowMuteOptions(true)} 
+                    style={{ color: '#ff4d4f' }}
+                />
+            )}
+            
+            <div style={{ height: '1px', backgroundColor: 'rgba(0,0,0,0.05)', margin: '8px 16px' }}></div>
+            <div style={{ padding: '0 16px 8px 16px', fontSize: '12px', color: '#999' }}>外部功能</div>
+            
+            <MenuButton 
+                icon="🔗" 
+                label="哔哩哔哩空间..." 
+                onClick={() => {
+                    const url = `https://space.bilibili.com/${user.uid}`
+                    if (window.ipc) {
+                        window.ipc.send('open-external', url)
+                    } else {
+                        window.open(url, '_blank')
+                    }
+                }} 
+            />
+          </div>
+        </>
+      )}
     </div>,
     document.body
   )

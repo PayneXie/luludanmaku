@@ -220,3 +220,155 @@ export function GetDanmuInfo(cookies: BiliCookies | null, roomId: number): Promi
     req.end()
   })
 }
+
+export function GetRoomInfo(roomId: number): Promise<any> {
+  return new Promise((resolve, reject) => {
+    https.get(`https://api.live.bilibili.com/room/v1/Room/get_info?room_id=${roomId}`, (res) => {
+      let data = ''
+      res.on('data', (chunk) => { data += chunk })
+      res.on('end', () => {
+        try {
+          const resp = JSON.parse(data)
+          if (resp.code === 0) {
+            resolve(resp.data)
+          } else {
+            reject(new Error(resp.message || 'Failed to get room info'))
+          }
+        } catch (e) {
+          reject(e)
+        }
+      })
+      res.on('error', (err) => reject(err))
+    })
+  })
+}
+
+export function GetSilentUserList(cookies: BiliCookies, roomId: number): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const postData = querystring.stringify({
+      room_id: roomId,
+      ps: 10,
+      pn: 1,
+      csrf_token: cookies.bili_jct,
+      csrf: cookies.bili_jct
+    })
+
+    const options = {
+      hostname: 'api.live.bilibili.com',
+      path: '/xlive/web-ucenter/v1/banned/GetSilentUserList',
+      method: 'POST',
+      headers: {
+        'Cookie': cookiesToString(cookies),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    }
+    
+    const req = https.request(options, (res) => {
+      let data = ''
+      res.on('data', (chunk) => { data += chunk })
+      res.on('end', () => {
+        try {
+          const resp = JSON.parse(data)
+          resolve(resp) // 直接返回原始响应
+        } catch (e) {
+          // 如果还是非 JSON，把原始文本返回以便调试
+          console.error('JSON Parse Error, raw data:', data)
+          reject(e)
+        }
+      })
+      res.on('error', (err) => {
+        reject(err)
+      })
+    })
+    
+    req.write(postData)
+    req.end()
+  })
+}
+
+export function AddSilentUser(cookies: BiliCookies, roomId: number, targetUid: number, hour: number): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const postData = querystring.stringify({
+      room_id: roomId,
+      tuid: targetUid,
+      mobile_app: 'web',
+      type: 1, // 必须参数，否则可能导致禁言时长无效
+      hour: hour,
+      csrf_token: cookies.bili_jct,
+      csrf: cookies.bili_jct
+    })
+
+    const options = {
+      hostname: 'api.live.bilibili.com',
+      path: '/xlive/web-ucenter/v1/banned/AddSilentUser',
+      method: 'POST',
+      headers: {
+        'Cookie': cookiesToString(cookies),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    }
+    
+    const req = https.request(options, (res) => {
+      let data = ''
+      res.on('data', (chunk) => { data += chunk })
+      res.on('end', () => {
+        try {
+          const resp = JSON.parse(data)
+          resolve(resp)
+        } catch (e) {
+          console.error('JSON Parse Error in AddSilentUser, raw data:', data)
+          reject(e)
+        }
+      })
+      res.on('error', (err) => reject(err))
+    })
+    
+    req.write(postData)
+    req.end()
+  })
+}
+
+export function GetUserInfo(cookies: BiliCookies): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'api.bilibili.com',
+      path: '/x/web-interface/nav',
+      method: 'GET',
+      headers: {
+        'Cookie': cookiesToString(cookies),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    }
+    
+    const req = https.request(options, (res) => {
+      let data = ''
+      res.on('data', (chunk) => {
+        data += chunk
+      })
+      res.on('end', () => {
+        try {
+          const resp = JSON.parse(data)
+          if (resp.code === 0 && resp.data.isLogin) {
+            resolve({
+              uname: resp.data.uname,
+              face: resp.data.face,
+              mid: resp.data.mid
+            })
+          } else {
+            reject(new Error(resp.message || 'Failed to get user info'))
+          }
+        } catch (e) {
+          reject(e)
+        }
+      })
+      res.on('error', (err) => {
+        reject(err)
+      })
+    })
+    req.end()
+  })
+}
