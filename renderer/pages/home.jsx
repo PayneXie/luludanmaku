@@ -11,6 +11,8 @@ import styles from '@/styles/console.module.css' // 引入 CSS 模块
 import loginStyles from '@/styles/login.module.css' // 引入登录 CSS 模块
 import roomSelectStyles from '@/styles/room-select.module.css' // 引入房间选择 CSS 模块
 import DebugPanel from '@/components/DebugPanel' // 引入调试面板
+import UserActionMenu from '@/components/UserActionMenu' // 引入用户操作菜单
+import Linkify from '@/components/Linkify' // 引入链接识别组件
 
 import level1 from '../public/images/level1.png'
 import level2 from '../public/images/level2.png'
@@ -34,6 +36,15 @@ export default function HomePage() {
   const [minGiftPrice, setMinGiftPrice] = useState(0) // RMB
   const [showGiftSettings, setShowGiftSettings] = useState(false)
   
+  // 弹幕过滤器
+  const [showDanmuFilter, setShowDanmuFilter] = useState(false)
+  const [danmuFilter, setDanmuFilter] = useState({
+      keyword: '',
+      enableUser: true,
+      enableContent: true,
+      enableUid: true
+  })
+  
   // 调试状态
   const [showDebug, setShowDebug] = useState(false)
   
@@ -54,6 +65,82 @@ export default function HomePage() {
   const [roomHistory, setRoomHistory] = useState([])
   const [showHistoryDropdown, setShowHistoryDropdown] = useState(false)
   const wrapperRef = useRef(null)
+  
+  // 筛选器 Refs (用于点击外部收起)
+  const danmuFilterRef = useRef(null)
+  const giftSettingsRef = useRef(null)
+
+  useEffect(() => {
+      const handleClickOutsidePanels = (event) => {
+          if (showDanmuFilter && danmuFilterRef.current && !danmuFilterRef.current.contains(event.target)) {
+              setShowDanmuFilter(false)
+          }
+          if (showGiftSettings && giftSettingsRef.current && !giftSettingsRef.current.contains(event.target)) {
+              setShowGiftSettings(false)
+          }
+      }
+      document.addEventListener('mousedown', handleClickOutsidePanels)
+      return () => document.removeEventListener('mousedown', handleClickOutsidePanels)
+  }, [showDanmuFilter, showGiftSettings])
+
+  // 用户操作菜单状态
+  const [selectedUser, setSelectedUser] = useState(null) // { user: {uid, uname, face}, position: {x, y} }
+
+  // 重点关注用户 (存储 UID 字符串)
+  const [highlightedUsers, setHighlightedUsers] = useState(new Set())
+  
+  const handleHighlightUser = (user) => {
+      setHighlightedUsers(prev => {
+          const newSet = new Set(prev)
+          const uid = String(user.uid)
+          if (newSet.has(uid)) {
+              newSet.delete(uid) // 再次点击取消关注
+          } else {
+              newSet.add(uid)
+          }
+          return newSet
+      })
+      setSelectedUser(null)
+  }
+
+  const handleUserClick = (e, user) => {
+      e.stopPropagation()
+      
+      // Toggle logic: If clicking the same user, close the menu
+      if (selectedUser && String(selectedUser.user.uid) === String(user.uid)) {
+          setSelectedUser(null)
+          return
+      }
+
+      // 获取点击元素的矩形位置，以实现精确对齐
+      const rect = e.currentTarget.getBoundingClientRect()
+      
+      let x = rect.left
+      let y = rect.bottom
+      
+      // 边界检查
+      if (x + 280 > window.innerWidth) {
+          x = window.innerWidth - 290
+      }
+      
+      // 如果下方空间不足 (假设菜单高度约 300px)，则显示在上方
+      if (y + 300 > window.innerHeight) {
+          y = rect.top - 300
+      }
+      
+      setSelectedUser({ user, position: { x, y } })
+  }
+  
+  const handleFilterUser = (user) => {
+      setDanmuFilter({
+          keyword: String(user.uid),
+          enableUser: false,
+          enableContent: false,
+          enableUid: true
+      })
+      // setShowDanmuFilter(true) // Don't auto open
+      setSelectedUser(null)
+  }
 
   // 加载设置和历史记录
   useEffect(() => {
@@ -604,13 +691,131 @@ export default function HomePage() {
                     className={`${styles['column']} ${styles['col-danmu']}`}
                     style={{ width: `${colWidths[0]}%` }}
                   >
-                      <div className={styles['col-header']}>弹幕列表</div>
+                      <div className={styles['col-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
+                          <span>弹幕列表</span>
+                          
+                          <div style={{ position: 'relative' }} ref={danmuFilterRef}>
+                              {/* 筛选按钮 */}
+                              <div 
+                                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                onClick={() => setShowDanmuFilter(!showDanmuFilter)}
+                                title="弹幕筛选"
+                              >
+                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                 </svg>
+                              </div>
+
+                              {/* 筛选面板 */}
+                              {showDanmuFilter && (
+                                  <div style={{
+                                      position: 'absolute',
+                                      top: '30px',
+                                      right: '-5px',
+                                      width: '260px',
+                                      background: '#fff',
+                                      border: '1px solid #ddd',
+                                      borderRadius: '6px',
+                                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                      padding: '12px',
+                                      zIndex: 1000,
+                                      color: '#333',
+                                      fontSize: '14px'
+                                  }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                          <input 
+                                              type="text" 
+                                              placeholder="搜索关键词..."
+                                              value={danmuFilter.keyword}
+                                              onChange={(e) => setDanmuFilter({ ...danmuFilter, keyword: e.target.value })}
+                                              style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #ddd', outline: 'none' }}
+                                          />
+                                          {danmuFilter.keyword && (
+                                              <button 
+                                                  onClick={() => setDanmuFilter({ ...danmuFilter, keyword: '' })}
+                                                  title="清除"
+                                                  style={{ 
+                                                      background: '#f1f3f5', 
+                                                      border: 'none', 
+                                                      borderRadius: '4px', 
+                                                      width: '28px', 
+                                                      height: '28px', 
+                                                      cursor: 'pointer',
+                                                      color: '#868e96',
+                                                      display: 'flex',
+                                                      alignItems: 'center',
+                                                      justifyContent: 'center',
+                                                      fontSize: '16px'
+                                                  }}
+                                              >
+                                                  ×
+                                              </button>
+                                          )}
+                                      </div>
+                                      
+                                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                              <input 
+                                                  type="checkbox" 
+                                                  checked={danmuFilter.enableUser}
+                                                  onChange={(e) => setDanmuFilter({ ...danmuFilter, enableUser: e.target.checked })}
+                                                  style={{ marginRight: '4px' }}
+                                              /> 用户名
+                                          </label>
+                                          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                              <input 
+                                                  type="checkbox" 
+                                                  checked={danmuFilter.enableContent}
+                                                  onChange={(e) => setDanmuFilter({ ...danmuFilter, enableContent: e.target.checked })}
+                                                  style={{ marginRight: '4px' }}
+                                              /> 内容
+                                          </label>
+                                          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                              <input 
+                                                  type="checkbox" 
+                                                  checked={danmuFilter.enableUid}
+                                                  onChange={(e) => setDanmuFilter({ ...danmuFilter, enableUid: e.target.checked })}
+                                                  style={{ marginRight: '4px' }}
+                                              /> UID(精确)
+                                          </label>
+                                      </div>
+                                  </div>
+                              )}
+                          </div>
+                      </div>
                       <div 
                         ref={danmuListRef}
                         className={styles['col-content']}
                         style={{ flex: 1, overflowY: 'auto' }} // 确保可滚动
                       >
-                          {danmuList.filter(item => item.type === 'msg' || item.type === 'system').slice().reverse().map(item => {
+                          {danmuList.filter(item => {
+                              // Basic Type Filter
+                              if (item.type !== 'msg' && item.type !== 'system') return false
+                              
+                              // Advanced Filter
+                              if (danmuFilter.keyword) {
+                                  // Always show system messages? Or filter them too?
+                                  // Let's filter system messages by content only
+                                  const kw = danmuFilter.keyword.toLowerCase()
+                                  
+                                  if (item.type === 'system') {
+                                      return item.data && item.data.toLowerCase().includes(kw)
+                                  }
+                                  
+                                  if (item.type === 'msg') {
+                                      const msg = item.data
+                                      let match = false
+                                      
+                                      if (danmuFilter.enableUser && msg.sender.uname.toLowerCase().includes(kw)) match = true
+                                      if (danmuFilter.enableContent && msg.content.toLowerCase().includes(kw)) match = true
+                                      if (danmuFilter.enableUid && String(msg.sender.uid) === kw) match = true
+                                      
+                                      return match
+                                  }
+                              }
+                              
+                              return true
+                          }).slice().reverse().map(item => {
                               if (item.type === 'msg') {
                                   const msg = item.data
                                   const guardLevel = msg.sender.medal_info ? msg.sender.medal_info.guard_level : 0
@@ -620,10 +825,18 @@ export default function HomePage() {
                                   // 舰长(3): 淡蓝色 (保持一致)
                                   // 提督(2): 淡紫色
                                   // 总督(1): 淡金色
+                                  // 重点关注: 淡红色 (覆盖其他背景)
+                                  
+                                  const isHighlighted = highlightedUsers.has(String(msg.sender.uid))
+                                  
                                   let bgColor = 'transparent'
                                   if (guardLevel === 3) bgColor = 'rgba(0, 176, 255, 0.15)'   // 舰长 (Light Blue)
                                   if (guardLevel === 2) bgColor = 'rgba(224, 64, 251, 0.2)'   // 提督 (Purple)
                                   if (guardLevel === 1) bgColor = 'rgba(255, 215, 0, 0.25)'   // 总督 (Gold)
+                                  
+                                  if (isHighlighted) {
+                                      bgColor = 'rgba(255, 50, 50, 0.2)' // Red for highlighted
+                                  }
 
                                   return (
                                     <div 
@@ -655,12 +868,17 @@ export default function HomePage() {
                                         )}
                                         
                                         {/* 发送者 */}
-                                        <span className={`${styles['uname']} ${isGuard ? styles['uname-guard'] : styles['uname-normal']}`}>
+                                        <span 
+                                            className={`${styles['uname']} ${isGuard ? styles['uname-guard'] : styles['uname-normal']}`}
+                                            onClick={(e) => handleUserClick(e, msg.sender)}
+                                            style={{ cursor: 'pointer' }}
+                                            data-user-action-trigger="true"
+                                        >
                                             {msg.sender.uname}:
                                         </span>
                                         
                                         {/* 内容 */}
-                                        <span>{msg.content}</span>
+                                        <span><Linkify>{msg.content}</Linkify></span>
                                     </div>
                                   )
                               } else if (item.type === 'system') {
@@ -705,7 +923,12 @@ export default function HomePage() {
                                                                      'var(--sc-level-0)'
                               return (
                                 <div key={item.id} className={styles['sc-card']} style={{ borderColor: levelColor }}>
-                                    <div className={styles['sc-header']} style={{ backgroundColor: levelColor }}>
+                                    <div 
+                                        className={styles['sc-header']} 
+                                        style={{ backgroundColor: levelColor, cursor: 'pointer' }}
+                                        onClick={(e) => handleUserClick(e, msg.sender)}
+                                        data-user-action-trigger="true"
+                                    >
                                         {/* SC 用户头像 */}
                                         <img 
                                             src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
@@ -737,7 +960,7 @@ export default function HomePage() {
                                         <span style={{marginLeft: 'auto'}}>￥{msg.price}</span>
                                     </div>
                                     <div className={styles['sc-body']}>
-                                        {msg.message}
+                                        <Linkify>{msg.message}</Linkify>
                                     </div>
                                 </div>
                               )
@@ -764,32 +987,34 @@ export default function HomePage() {
                       <div className={styles['col-header']} style={{ color: 'var(--accent-yellow)', display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
                           <span>礼物列表</span>
                           
-                          {/* 设置图标 (SVG) */}
-                          <div 
-                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                            onClick={() => setShowGiftSettings(!showGiftSettings)}
-                          >
-                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                 <circle cx="12" cy="12" r="3"></circle>
-                                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                             </svg>
-                          </div>
+                          <div style={{ position: 'relative' }} ref={giftSettingsRef}>
+                              {/* 设置图标 (SVG) -> 改为 Filter 图标 */}
+                              <div 
+                                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                onClick={() => setShowGiftSettings(!showGiftSettings)}
+                                title="礼物筛选"
+                              >
+                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                 </svg>
+                              </div>
 
-                          {/* 设置弹出窗口 (Native) */}
-                          {showGiftSettings && (
-                              <div style={{
-                                  position: 'absolute',
-                                  top: '40px',
-                                  right: '10px',
-                                  width: '240px',
-                                  background: '#fff',
-                                  border: '1px solid #ddd',
-                                  borderRadius: '6px',
-                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                  padding: '12px',
-                                  zIndex: 1000,
-                                  color: '#333'
-                              }}>
+                              {/* 设置弹出窗口 (Native) */}
+                              {showGiftSettings && (
+                                  <div style={{
+                                      position: 'absolute',
+                                      top: '30px',
+                                      right: '-5px',
+                                      width: '240px',
+                                      background: '#fff',
+                                      border: '1px solid #ddd',
+                                      borderRadius: '6px',
+                                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                      padding: '12px',
+                                      zIndex: 1000,
+                                      color: '#333',
+                                      fontSize: '14px'
+                                  }}>
                                   <div style={{ marginBottom: 8, fontWeight: 'bold', fontSize: '14px' }}>最低金额 (元)</div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                       <input 
@@ -817,6 +1042,7 @@ export default function HomePage() {
                                   {/* 这里简化了关闭覆盖层/点击外部的处理程序 */}
                               </div>
                           )}
+                          </div>
                       </div>
                       <div className={styles['col-content']}>
                           {danmuList.filter(item => item.type === 'gift').slice().reverse().map(item => {
@@ -841,7 +1067,11 @@ export default function HomePage() {
                                         }}
                                       >
                                           <div className={styles['gift-row-top']}>
-                                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                              <div 
+                                                style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                                                onClick={(e) => handleUserClick(e, msg.sender)}
+                                                data-user-action-trigger="true"
+                                              >
                                                 <img 
                                                     src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
                                                     alt="face" 
@@ -898,7 +1128,11 @@ export default function HomePage() {
                                     }}
                                   >
                                       <div className={styles['gift-row-top']}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <div 
+                                            style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                                            onClick={(e) => handleUserClick(e, msg.sender)}
+                                            data-user-action-trigger="true"
+                                          >
                                             <img 
                                                 src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
                                                 alt="face" 
@@ -923,6 +1157,18 @@ export default function HomePage() {
                   </div>
 
               </div>
+              
+              {/* 用户操作菜单 (Portal) */}
+              {selectedUser && (
+                  <UserActionMenu 
+                      user={selectedUser.user} 
+                      position={selectedUser.position} 
+                      onClose={() => setSelectedUser(null)} 
+                      onFilter={handleFilterUser}
+                      onHighlight={handleHighlightUser}
+                      isHighlighted={highlightedUsers.has(String(selectedUser.user.uid))}
+                  />
+              )}
           </div>
         </React.Fragment>
       )

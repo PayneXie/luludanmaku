@@ -9,6 +9,7 @@ export default function DebugPanel({ onClose }) {
 
   const [formData, setFormData] = useState({
     uname: 'DebugUser',
+    uid: '12345',
     content: 'Test Content',
     price: 30,
     giftName: '辣条',
@@ -150,15 +151,26 @@ export default function DebugPanel({ onClose }) {
       {/* Body */}
       <div style={{ padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         
-        {/* Common: Username */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>用户名</label>
-            <input 
-                name="uname" 
-                value={formData.uname} 
-                onChange={handleChange}
-                style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }}
-            />
+        {/* Common: Username & UID */}
+        <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 2, minWidth: 0 }}>
+                <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>用户名</label>
+                <input 
+                    name="uname" 
+                    value={formData.uname} 
+                    onChange={handleChange}
+                    style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #ddd', boxSizing: 'border-box' }}
+                />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>UID</label>
+                <input 
+                    name="uid" 
+                    value={formData.uid} 
+                    onChange={handleChange}
+                    style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #ddd', boxSizing: 'border-box' }}
+                />
+            </div>
         </div>
 
         {activeTab === 'danmu' && (

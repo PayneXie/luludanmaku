@@ -1,5 +1,5 @@
 import path from 'path'
-import { app, ipcMain, Menu, BrowserWindow } from 'electron'
+import { app, ipcMain, Menu, BrowserWindow, shell } from 'electron'
 import serve from 'electron-serve'
 import { createWindow } from './helpers'
 import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo, BiliCookies } from './lib/bilibili_login'
@@ -277,6 +277,7 @@ ipcMain.on('bilibili-disconnect-socket', () => {
 
 // Debug IPC for custom messages
 ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
+  const uid = Number(data.uid) || 12345
   if (type === 'danmu') {
      const senderGuardLevel = Number(data.senderGuardLevel) || 0
      const mockMsg = {
@@ -290,7 +291,7 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
              { "user_hash": "0", "log_id": "0", "reply_uname": "" } // 15: extra_info
            ], 
            data.content || "Test Danmaku", 
-           [12345, data.uname || "TestUser", 0, 0, 0, 10000, 1, ""], 
+           [uid, data.uname || "TestUser", 0, 0, 0, 10000, 1, ""], 
            [5, "TestMedal", "TestAnchor", 123, 0x5896de, "", 0, 6809855, 2951253, 10329087, senderGuardLevel, 1], 
            [0,0,9868950,">50000"], 
            ["title-531-1", "title-531-1"], 
@@ -304,7 +305,7 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
         cmd: 'SUPER_CHAT_MESSAGE',
         data: {
             id: Math.floor(Math.random() * 100000),
-            uid: 12345,
+            uid: uid,
             price: price,
             rate: 1000,
             message: data.content || "Test SC",
@@ -395,7 +396,7 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
             timestamp: Math.floor(Date.now() / 1000),
             top_list: null,
             total_coin: giftPrice * num,
-            uid: 12345,
+            uid: uid,
             uname: data.uname || "TestGift_User"
         }
     }
@@ -413,7 +414,7 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
     const mockGuard = {
         cmd: 'USER_TOAST_MSG',
         data: {
-            uid: 12345,
+            uid: uid,
             username: data.uname || "TestGuard_User",
             guard_level: level,
             num: num,
@@ -458,4 +459,8 @@ ipcMain.on('window-set-always-on-top', (event, flag) => {
     if (win) {
         win.setAlwaysOnTop(flag)
     }
+})
+
+ipcMain.on('open-external', (event, url) => {
+    shell.openExternal(url)
 })
