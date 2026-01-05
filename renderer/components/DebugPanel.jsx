@@ -1,13 +1,19 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 
 export default function DebugPanel({ onClose }) {
   const [activeTab, setActiveTab] = useState('danmu')
+  const [position, setPosition] = useState({ x: window.innerWidth - 320, y: window.innerHeight - 400 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartRef = useRef({ x: 0, y: 0 })
+  const panelRef = useRef(null)
+
   const [formData, setFormData] = useState({
     uname: 'DebugUser',
     content: 'Test Content',
     price: 30,
     giftName: '辣条',
-    num: 1
+    num: 1,
+    guardLevel: 3 // 1:总督, 2:提督, 3:舰长
   })
 
   const handleChange = (e) => {
@@ -21,41 +27,82 @@ export default function DebugPanel({ onClose }) {
     })
   }
 
+  const handleMouseDown = (e) => {
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
+    setIsDragging(true)
+    dragStartRef.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    }
+  }
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDragging) return
+      setPosition({
+        x: e.clientX - dragStartRef.current.x,
+        y: e.clientY - dragStartRef.current.y
+      })
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging])
+
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: '20px',
-      right: '20px',
-      width: '300px',
-      backgroundColor: 'white',
-      border: '1px solid #ccc',
-      borderRadius: '8px',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-      zIndex: 1000,
-      display: 'flex',
-      flexDirection: 'column',
-      fontFamily: 'sans-serif',
-      fontSize: '14px',
-      color: '#333'
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '10px',
-        borderBottom: '1px solid #eee',
+    <div 
+      ref={panelRef}
+      style={{
+        position: 'fixed',
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        width: '300px',
+        backgroundColor: 'white',
+        border: '1px solid #ccc',
+        borderRadius: '8px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+        zIndex: 1000,
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        background: '#f8f9fa',
-        borderTopLeftRadius: '8px',
-        borderTopRightRadius: '8px'
-      }}>
+        flexDirection: 'column',
+        fontFamily: 'sans-serif',
+        fontSize: '14px',
+        color: '#333',
+        userSelect: 'none'
+      }}
+    >
+      {/* Header */}
+      <div 
+        onMouseDown={handleMouseDown}
+        style={{
+          padding: '10px',
+          borderBottom: '1px solid #eee',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: '#f8f9fa',
+          borderTopLeftRadius: '8px',
+          borderTopRightRadius: '8px',
+          cursor: isDragging ? 'grabbing' : 'grab'
+        }}
+      >
         <strong style={{ margin: 0 }}>Debug Console</strong>
         <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px' }}>×</button>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #eee' }}>
-        {['danmu', 'sc', 'gift'].map(tab => (
+        {['danmu', 'sc', 'gift', 'guard'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -69,7 +116,7 @@ export default function DebugPanel({ onClose }) {
               color: activeTab === tab ? '#228be6' : '#666'
             }}
           >
-            {tab === 'danmu' ? 'Danmu' : tab === 'sc' ? 'SC' : 'Gift'}
+            {tab === 'danmu' ? '弹幕' : tab === 'sc' ? 'SC' : tab === 'gift' ? '礼物' : '上舰'}
           </button>
         ))}
       </div>
@@ -79,7 +126,7 @@ export default function DebugPanel({ onClose }) {
         
         {/* Common: Username */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>Username</label>
+            <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>用户名</label>
             <input 
                 name="uname" 
                 value={formData.uname} 
@@ -90,7 +137,7 @@ export default function DebugPanel({ onClose }) {
 
         {activeTab === 'danmu' && (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>Content</label>
+                <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>内容</label>
                 <textarea 
                     name="content" 
                     value={formData.content} 
@@ -103,7 +150,7 @@ export default function DebugPanel({ onClose }) {
         {activeTab === 'sc' && (
             <>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>Price (￥)</label>
+                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>价格 (￥)</label>
                     <input 
                         type="number"
                         name="price" 
@@ -113,7 +160,7 @@ export default function DebugPanel({ onClose }) {
                     />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>Content</label>
+                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>内容</label>
                     <textarea 
                         name="content" 
                         value={formData.content} 
@@ -127,7 +174,7 @@ export default function DebugPanel({ onClose }) {
         {activeTab === 'gift' && (
             <>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>Gift Name</label>
+                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>礼物名称</label>
                     <input 
                         name="giftName" 
                         value={formData.giftName} 
@@ -136,7 +183,35 @@ export default function DebugPanel({ onClose }) {
                     />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>Count</label>
+                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>数量</label>
+                    <input 
+                        type="number"
+                        name="num" 
+                        value={formData.num} 
+                        onChange={handleChange}
+                        style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }}
+                    />
+                </div>
+            </>
+        )}
+
+        {activeTab === 'guard' && (
+            <>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>等级</label>
+                    <select
+                        name="guardLevel"
+                        value={formData.guardLevel}
+                        onChange={handleChange}
+                        style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }}
+                    >
+                        <option value={3}>舰长 (198元)</option>
+                        <option value={2}>提督 (1998元)</option>
+                        <option value={1}>总督 (19998元)</option>
+                    </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>数量 (月)</label>
                     <input 
                         type="number"
                         name="num" 
@@ -161,7 +236,7 @@ export default function DebugPanel({ onClose }) {
                 fontWeight: 'bold'
             }}
         >
-            Send {activeTab.toUpperCase()}
+            发送 {activeTab === 'danmu' ? '弹幕' : activeTab === 'sc' ? 'SC' : activeTab === 'gift' ? '礼物' : '上舰'}
         </button>
 
       </div>

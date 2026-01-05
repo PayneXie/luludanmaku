@@ -388,6 +388,31 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
         }
     }
     event.reply('danmu-message', mockGift)
+  } else if (type === 'guard') {
+    // Mock USER_TOAST_MSG (Guard)
+    const level = Number(data.guardLevel) || 3
+    const num = Number(data.num) || 1
+    // Price map: 1=19998, 2=1998, 3=198 (RMB) -> *1000 for gold
+    let price = 198000
+    if (level === 1) price = 19998000
+    if (level === 2) price = 1998000
+    price = price * num
+
+    const mockGuard = {
+        cmd: 'USER_TOAST_MSG',
+        data: {
+            uid: 12345,
+            username: data.uname || "TestGuard_User",
+            guard_level: level,
+            num: num,
+            price: price,
+            unit: "月",
+            start_time: Math.floor(Date.now() / 1000),
+            payflow_id: "mock_payflow_" + Date.now(),
+            roomid: 123
+        }
+    }
+    event.reply('danmu-message', mockGuard)
   }
 })
 

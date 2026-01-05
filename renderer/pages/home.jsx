@@ -4,13 +4,13 @@ import Head from 'next/head'
 import QRCode from 'qrcode'
 import { getQrCode, checkQrCode, QrCodeStatus, getDanmuInfo, getGiftConfig } from '@/lib/bilibili'
 import { createDanmuEntry } from '@/lib/common/danmu-entry'
-import { DanmuMessage, GiftMessage, SuperChatMessage } from '@/lib/types/danmaku'
+import { DanmuMessage, GiftMessage, SuperChatMessage, GuardMessage } from '@/lib/types/danmaku'
 import { levelToIconURL } from '@/lib/utils'
 import moment from 'moment'
-import styles from '@/styles/console.module.css' // Import CSS Module
-import loginStyles from '@/styles/login.module.css' // Import Login CSS Module
-import roomSelectStyles from '@/styles/room-select.module.css' // Import Room Select CSS Module
-import DebugPanel from '@/components/DebugPanel' // Import Debug Panel
+import styles from '@/styles/console.module.css' // 引入 CSS 模块
+import loginStyles from '@/styles/login.module.css' // 引入登录 CSS 模块
+import roomSelectStyles from '@/styles/room-select.module.css' // 引入房间选择 CSS 模块
+import DebugPanel from '@/components/DebugPanel' // 引入调试面板
 
 import level1 from '../public/images/level1.png'
 import level2 from '../public/images/level2.png'
@@ -22,22 +22,22 @@ export default function HomePage() {
   const [loggedIn, setLoggedIn] = useState(false)
   const [userInfo, setUserInfo] = useState(null)
   
-  // Danmu state
+  // 弹幕状态
   const [roomId, setRoomId] = useState('')
   const [danmuStatus, setDanmuStatus] = useState('Disconnected')
   const [danmuList, setDanmuList] = useState([])
   const danmuListRef = useRef(null)
   
-  // Gift Config Cache
+  // 礼物配置缓存
   const [giftMap, setGiftMap] = useState({}) 
-  // Gift Filter
+  // 礼物过滤器
   const [minGiftPrice, setMinGiftPrice] = useState(0) // RMB
   const [showGiftSettings, setShowGiftSettings] = useState(false)
   
-  // Debug State
+  // 调试状态
   const [showDebug, setShowDebug] = useState(false)
   
-  // Window State
+  // 窗口状态
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false)
   const toggleAlwaysOnTop = () => {
       const newState = !isAlwaysOnTop
@@ -45,17 +45,17 @@ export default function HomePage() {
       window.ipc.send('window-set-always-on-top', newState)
   }
   
-  // UI Settings
+  // 界面设置
   const [showSettings, setShowSettings] = useState(false)
   const [uiScale, setUiScale] = useState(1.0)
   const [fontSize, setFontSize] = useState(14)
 
-  // Room History
+  // 房间历史记录
   const [roomHistory, setRoomHistory] = useState([])
   const [showHistoryDropdown, setShowHistoryDropdown] = useState(false)
   const wrapperRef = useRef(null)
 
-  // Load Settings & History
+  // 加载设置和历史记录
   useEffect(() => {
       const savedScale = localStorage.getItem('uiScale')
       const savedFont = localStorage.getItem('fontSize')
@@ -93,7 +93,7 @@ export default function HomePage() {
       localStorage.setItem('roomHistory', JSON.stringify(newHistory))
   }
 
-  // Save Settings
+  // 保存设置
   const saveSettings = (scale, font) => {
       setUiScale(scale)
       setFontSize(font)
@@ -101,14 +101,14 @@ export default function HomePage() {
       localStorage.setItem('fontSize', font.toString())
   }
   
-  // Column Widths (in percent)
-  // Initial: 33.33% each.
+  // 列宽（百分比）
+  // 初始值：每列 33.33%
   const [colWidths, setColWidths] = useState([33.33, 33.33, 33.33])
   const containerRef = useRef(null)
 
   const pollTimer = useRef(null)
 
-  // Drag Handling
+  // 拖拽处理
   const startResize = (index, e) => {
       e.preventDefault()
       const startX = e.clientX
@@ -120,8 +120,8 @@ export default function HomePage() {
           const deltaPercent = (deltaX / containerWidth) * 100
           
           const newWidths = [...startWidths]
-          // Adjust current column and next column
-          // Constraint: Minimum 10% width
+          // 调整当前列和下一列
+          // 限制：最小宽度 10%
           const minWidth = 10
           
           let newCurrent = startWidths[index] + deltaPercent
@@ -181,7 +181,6 @@ export default function HomePage() {
               data: text
           }
           const updated = [...prev, newItem]
-          if (updated.length > 2000) return updated.slice(-2000)
           return updated
       })
   }
@@ -190,7 +189,7 @@ export default function HomePage() {
     if (!roomId) return alert('Please enter Room ID')
     if (!userInfo) return alert('Please login first')
     
-    // Clear previous list
+    // 清空之前的列表
     setDanmuList([])
     
     addSystemMessage(`直播间已连接：${roomId}`)
@@ -201,7 +200,7 @@ export default function HomePage() {
       
       addSystemMessage('基础信息已加载，正在建立连接…')
 
-      // Fetch Gift Config in parallel (non-blocking)
+      // 并行获取礼物配置（非阻塞）
       getGiftConfig(Number(roomId)).then(config => {
           const map = {}
           if (config && config.list) {
@@ -209,7 +208,7 @@ export default function HomePage() {
                   map[g.id] = {
                       name: g.name,
                       price: g.price,
-                      coin_type: g.coin_type // 'gold' or 'silver'
+                      coin_type: g.coin_type // 'gold' 或 'silver'
                   }
               })
           }
@@ -225,23 +224,22 @@ export default function HomePage() {
         token: danmuInfo.token
       }
       
-      // Connect via Main Process
+      // 通过主进程连接
       window.ipc.send('bilibili-connect-socket', wsInfo)
       
       saveToHistory(roomId)
       
-      // Setup listener
-      // We use a ref to hold the listener so we can remove it later
+      // 设置监听器
+      // 使用 ref 来保存监听器，以便稍后移除
       const msgHandler = (event, msg) => {
-         // Keep max 500 total messages to prevent memory issues, but filter logic in render handles separation
-         // We'll just append and slice if too big
+         // 根据要求保留所有消息
          setDanmuList(prev => {
              const newList = [...prev, { 
                 id: Math.random(), 
                 type: 'msg',
-                data: null // will be set below
+                data: null // 将在下面设置
             }]
-            // However, since we have different types, we should construct the object first
+            // 由于有不同的类型，应该先构造对象
             let newItem = null;
             
             if (msg.cmd === 'DANMU_MSG') {
@@ -256,20 +254,23 @@ export default function HomePage() {
                 try {
                    newItem = { id: Math.random(), type: 'superchat', data: new SuperChatMessage(msg) }
                 } catch(e) { console.error(e); return prev; }
+            } else if (msg.cmd === 'USER_TOAST_MSG') {
+                try {
+                   newItem = { id: Math.random(), type: 'gift', data: new GuardMessage(msg) }
+                } catch(e) { console.error(e); return prev; }
             } else if (msg.cmd === 'SYSTEM_MSG') {
                    newItem = { id: Math.random(), type: 'system', data: msg.msg }
             }
 
             if (!newItem) return prev;
             
-            // Limit total history to 1000 to avoid crash, but that should be enough for "persistence" during session
+            // 保留所有数据
             const updated = [...prev, newItem]
-            if (updated.length > 2000) return updated.slice(-2000)
             return updated
          })
       }
       
-      // Remove old listener to avoid duplicates
+      // 移除旧监听器以避免重复
       window.ipc.removeAllListeners('danmu-message')
       window.ipc.on('danmu-message', msgHandler)
       
@@ -287,7 +288,7 @@ export default function HomePage() {
 
   const initLogin = async () => {
     try {
-      stopPolling() // Clear existing timer if any
+      stopPolling() // 清除现有的定时器
       setStatus('正在获取二维码...')
       const { url, oauthKey } = await getQrCode()
       
@@ -295,12 +296,12 @@ export default function HomePage() {
       setQrImage(dataUrl)
       setStatus('请使用哔哩哔哩手机客户端扫码')
       
-      // Start polling
+      // 开始轮询
       pollTimer.current = setInterval(async () => {
         try {
           const data = await checkQrCode(oauthKey)
           // QrCodeStatus: NeedScan: 0, NeedConfirm: 1, Success: 2
-          if (data.status === QrCodeStatus.Success) { // Success
+          if (data.status === QrCodeStatus.Success) { // 成功
             stopPolling()
             setStatus('登录成功！')
             setLoggedIn(true)
@@ -308,10 +309,10 @@ export default function HomePage() {
           } else if (data.status === QrCodeStatus.NeedConfirm) {
             setStatus('已扫码，请在手机上确认')
           } else if (data.status === QrCodeStatus.NeedScan) {
-            // Waiting for scan, do nothing
+            // 等待扫码，什么也不做
           }
         } catch (pollErr) {
-             // Handle error (likely expired)
+             // 处理错误（可能已过期）
              console.log('Poll error:', pollErr)
              setStatus('二维码已过期或出错，正在刷新...')
              stopPolling()
@@ -325,32 +326,32 @@ export default function HomePage() {
     }
   }
 
-  // Use Bilibili standard level colors for medals instead of the raw color which can be dark
+  // 使用 Bilibili 标准等级颜色作为勋章颜色
   const getMedalColor = (level) => {
-      if (level >= 1 && level <= 20) return '#61c05a' // Green (1-20)
-      if (level >= 21 && level <= 40) return '#5896de' // Blue (21-40)
-      if (level >= 41 && level <= 60) return '#a068f1' // Purple (41-60)
-      if (level >= 61) return '#f08c00' // Gold (>60)
-      return '#61c05a' // Default
+      if (level >= 1 && level <= 20) return '#61c05a' // 绿色 (1-20)
+      if (level >= 21 && level <= 40) return '#5896de' // 蓝色 (21-40)
+      if (level >= 41 && level <= 60) return '#a068f1' // 紫色 (41-60)
+      if (level >= 61) return '#f08c00' // 金色 (>60)
+      return '#61c05a' // 默认
   }
 
-  // Auto scroll/top logic
-  // We want: Newest at top.
-  // Unless user scrolls down, keep at top.
+  // 自动滚动/置顶逻辑
+  // 最新的在顶部。
+  // 除非向下滚动，否则保持在顶部。
   useEffect(() => {
     if (danmuListRef.current) {
-        // Since we are reversing the list (flex-direction column, but mapping reverse),
-        // scrollTop 0 is actually the top (newest).
-        // If user scrolls down (scrollTop > 0), we stop auto-scrolling to top.
+        // 因为反转了列表（flex-direction column，但映射反转），
+        // scrollTop 0 实际上是顶部（最新的）。
+        // 如果用户向下滚动 (scrollTop > 0)，我们停止自动滚动到顶部。
         
-        // Wait, standard behavior for "Newest at Top":
-        // 1. Render list as [New, Old, Older...]
-        // 2. Container scrollTop = 0 means we are at the newest.
-        // 3. If user scrolls down (scrollTop > threshold), we don't force it back to 0.
-        // 4. If scrollTop is near 0, we keep it at 0.
+        // 等等，“最新的在顶部”的标准行为：
+        // 1. 渲染列表为 [新, 旧, 更旧...]
+        // 2. 容器 scrollTop = 0 意味着在最新的位置。
+        // 3. 如果用户向下滚动 (scrollTop > 阈值)，不会强制将其返回到 0。
+        // 4. 如果 scrollTop 接近 0，将其保持在 0。
         
         const { scrollTop } = danmuListRef.current
-        if (scrollTop < 50) { // Threshold
+        if (scrollTop < 50) { // 阈值
             danmuListRef.current.scrollTop = 0
         }
     }
@@ -390,7 +391,7 @@ export default function HomePage() {
       )
   }
 
-  // Helper to safely get icon URL
+  // 安全获取图标 URL 的辅助函数
   const getGuardIcon = (level) => {
     if (level === 1) return level1.src || level1
     if (level === 2) return level2.src || level2
@@ -398,7 +399,7 @@ export default function HomePage() {
     return ''
   }
 
-  // Connected View
+  // 已连接视图
   if (danmuStatus.startsWith('Connected')) {
       return (
         <React.Fragment>
@@ -413,7 +414,7 @@ export default function HomePage() {
                 fontSize: `${fontSize}px`
             }}
           >
-              {/* Header */}
+              {/* 头部 */}
               <div className={styles['console-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px' }}>
                   <div className={styles['room-info']} style={{ display: 'flex', flexDirection: 'column' }}>
                       <strong style={{ fontSize: '14px' }}>直播间: {roomId}</strong>
@@ -421,7 +422,7 @@ export default function HomePage() {
                   </div>
                   
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {/* Always on Top Button (Pin Icon) */}
+                      {/* 置顶按钮（图钉图标） */}
                       <button 
                         title={isAlwaysOnTop ? "取消置顶" : "置顶窗口"}
                         style={{ 
@@ -440,19 +441,19 @@ export default function HomePage() {
                         onClick={toggleAlwaysOnTop}
                       >
                         {isAlwaysOnTop ? (
-                            // Pinned (Solid)
+                            // 已置顶（实心）
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                                 <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" />
                             </svg>
                         ) : (
-                            // Unpinned (Outline)
+                            // 未置顶（轮廓）
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h2.8v-6H18v-2l-2-2z"></path>
                             </svg>
                         )}
                       </button>
 
-                      {/* Debug Button (Bug Icon) */}
+                      {/* 调试按钮（Bug 图标） */}
                       <button 
                         title="调试工具"
                         style={{ 
@@ -475,7 +476,7 @@ export default function HomePage() {
                         </svg>
                       </button>
 
-                      {/* Settings Button (Gear Icon) */}
+                      {/* 设置按钮（齿轮图标） */}
                       <div style={{ position: 'relative' }}>
                           <button 
                             title="界面设置"
@@ -499,7 +500,7 @@ export default function HomePage() {
                             </svg>
                           </button>
                           
-                          {/* Settings Modal (Portal) */}
+                          {/* 设置模态框（Portal） */}
                           {showSettings && typeof document !== 'undefined' && createPortal(
                               <div style={{
                                   position: 'fixed',
@@ -514,8 +515,8 @@ export default function HomePage() {
                                   zIndex: 9999,
                                   color: '#333',
                                   textAlign: 'left',
-                                  fontFamily: 'sans-serif', // Reset font
-                                  fontSize: '14px' // Reset font size
+                                  fontFamily: 'sans-serif', // 重置字体
+                                  fontSize: '14px' // 重置字体大小
                               }}>
                                   <div style={{ marginBottom: 16 }}>
                                       <div style={{ marginBottom: 8, fontWeight: 'bold', fontSize: '14px' }}>界面缩放 ({(uiScale * 100).toFixed(0)}%)</div>
@@ -564,7 +565,7 @@ export default function HomePage() {
                           )}
                       </div>
 
-                      {/* Disconnect Button (Power Icon) */}
+                      {/* 断开连接按钮（电源图标） */}
                       <button 
                         title="断开连接"
                         className={styles['btn-disconnect']} 
@@ -573,7 +574,7 @@ export default function HomePage() {
                             padding: '6px',
                             cursor: 'pointer',
                             backgroundColor: 'transparent',
-                            color: '#ff4d4f', // Red for disconnect
+                            color: '#ff4d4f', // 红色表示断开连接
                             border: '1px solid transparent',
                             borderRadius: '4px',
                             transition: 'all 0.2s',
@@ -590,13 +591,13 @@ export default function HomePage() {
                   </div>
               </div>
 
-              {/* Debug Panel */}
+              {/* 调试面板 */}
               {showDebug && <DebugPanel onClose={() => setShowDebug(false)} />}
 
-              {/* Main Content - 3 Columns */}
+              {/* 主要内容 - 3 列 */}
               <div className={styles['console-body']} ref={containerRef}>
                   
-                  {/* Left: Danmu List (Scrollable) */}
+                  {/* 左侧：弹幕列表（可滚动） */}
                   <div 
                     className={`${styles['column']} ${styles['col-danmu']}`}
                     style={{ width: `${colWidths[0]}%` }}
@@ -605,7 +606,7 @@ export default function HomePage() {
                       <div 
                         ref={danmuListRef}
                         className={styles['col-content']}
-                        style={{ flex: 1, overflowY: 'auto' }} // Ensure it scrolls
+                        style={{ flex: 1, overflowY: 'auto' }} // 确保可滚动
                       >
                           {danmuList.filter(item => item.type === 'msg' || item.type === 'system').slice().reverse().map(item => {
                               if (item.type === 'msg') {
@@ -613,7 +614,7 @@ export default function HomePage() {
                                   const isGuard = msg.sender.medal_info && msg.sender.medal_info.guard_level > 0
                                   return (
                                     <div key={item.id} className={styles['danmu-item']}>
-                                        {/* Medal */}
+                                        {/* 勋章 */}
                                         {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
                                             <span 
                                               className={styles['medal-badge']}
@@ -627,7 +628,7 @@ export default function HomePage() {
                                             </span>
                                         )}
                                         
-                                        {/* Guard Icon */}
+                                        {/* 舰长图标 */}
                                         {isGuard && (
                                             <img 
                                                 src={getGuardIcon(msg.sender.medal_info.guard_level)}
@@ -636,12 +637,12 @@ export default function HomePage() {
                                             />
                                         )}
                                         
-                                        {/* Sender */}
+                                        {/* 发送者 */}
                                         <span className={`${styles['uname']} ${isGuard ? styles['uname-guard'] : styles['uname-normal']}`}>
                                             {msg.sender.uname}:
                                         </span>
                                         
-                                        {/* Content */}
+                                        {/* 内容 */}
                                         <span>{msg.content}</span>
                                     </div>
                                   )
@@ -657,13 +658,13 @@ export default function HomePage() {
                       </div>
                   </div>
 
-                  {/* Resizer 1 */}
+                  {/* 调整大小 1 */}
                   <div 
                     className={styles['resizer']} 
                     onMouseDown={(e) => startResize(0, e)}
                   />
 
-                  {/* Middle: SuperChats (Sticky) */}
+                  {/* 中间：醒目留言（Sticky） */}
                   <div 
                     className={`${styles['column']} ${styles['col-sc']}`}
                     style={{ width: `${colWidths[1]}%` }}
@@ -672,7 +673,7 @@ export default function HomePage() {
                       <div className={styles['col-content']}>
                           {danmuList.filter(item => item.type === 'superchat').reverse().map(item => {
                               const msg = item.data
-                              // Bilibili SC Color Levels
+                              // Bilibili SC 颜色等级
                               // < 50: Dark Blue (Level 0)
                               // 50 - 99: Light Blue (Level 1)
                               // 100 - 499: Yellow (Level 2)
@@ -688,14 +689,14 @@ export default function HomePage() {
                               return (
                                 <div key={item.id} className={styles['sc-card']} style={{ borderColor: levelColor }}>
                                     <div className={styles['sc-header']} style={{ backgroundColor: levelColor }}>
-                                        {/* SC User Avatar */}
+                                        {/* SC 用户头像 */}
                                         <img 
                                             src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
                                             alt="face" 
                                             style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '6px', verticalAlign: 'middle' }} 
                                         />
                                         
-                                        {/* SC Medal (Similar to Danmu) */}
+                                        {/* SC 勋章（类似于弹幕） */}
                                         {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
                                             <span 
                                               className={styles['medal-badge']}
@@ -704,11 +705,11 @@ export default function HomePage() {
                                                 backgroundColor: getMedalColor(msg.sender.medal_info.medal_level),
                                                 backgroundImage: 'none',
                                                 marginRight: '6px',
-                                                transform: 'none', // Reset transform for flex alignment
-                                                lineHeight: '14px', // Adjust line height for better centering
-                                                display: 'flex', // Use flex to center text inside badge
+                                                transform: 'none', // 重置 transform 以进行 flex 对齐
+                                                lineHeight: '14px', // 调整行高以更好地居中
+                                                display: 'flex', // 使用 flex 在徽章内居中文本
                                                 alignItems: 'center',
-                                                height: '16px' // Fixed height matching icon
+                                                height: '16px' // 固定高度匹配图标
                                               }}
                                             >
                                                 {msg.sender.medal_info.medal_name}|{msg.sender.medal_info.medal_level}
@@ -732,13 +733,13 @@ export default function HomePage() {
                       </div>
                   </div>
 
-                  {/* Resizer 2 */}
+                  {/* 调整大小 2 */}
                   <div 
                     className={styles['resizer']} 
                     onMouseDown={(e) => startResize(1, e)}
                   />
 
-                  {/* Right: Gifts */}
+                  {/* 右侧：礼物 */}
                   <div 
                     className={`${styles['column']} ${styles['col-gift']}`}
                     style={{ width: `${colWidths[2]}%` }}
@@ -746,7 +747,7 @@ export default function HomePage() {
                       <div className={styles['col-header']} style={{ color: 'var(--accent-yellow)', display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
                           <span>礼物列表</span>
                           
-                          {/* Settings Icon (SVG) */}
+                          {/* 设置图标 (SVG) */}
                           <div 
                             style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                             onClick={() => setShowGiftSettings(!showGiftSettings)}
@@ -757,7 +758,7 @@ export default function HomePage() {
                              </svg>
                           </div>
 
-                          {/* Settings Popover (Native) */}
+                          {/* 设置弹出窗口 (Native) */}
                           {showGiftSettings && (
                               <div style={{
                                   position: 'absolute',
@@ -796,35 +797,68 @@ export default function HomePage() {
                                   <div style={{ fontSize: '12px', color: '#888', marginTop: 8 }}>
                                       低于 ￥{minGiftPrice} 的礼物将被隐藏。
                                   </div>
-                                  {/* Close overlay/click-outside handler is simplified here */}
+                                  {/* 这里简化了关闭覆盖层/点击外部的处理程序 */}
                               </div>
                           )}
                       </div>
                       <div className={styles['col-content']}>
-                          {danmuList.filter(item => item.type === 'gift').slice(-50).reverse().map(item => {
+                          {danmuList.filter(item => item.type === 'gift').slice().reverse().map(item => {
                               const msg = item.data
+                              
+                              // Handle GuardMessage (Captain/Admiral/Governor)
+                              if (msg instanceof GuardMessage || msg.guard_level) {
+                                  const guardName = msg.guard_level === 1 ? '总督' : msg.guard_level === 2 ? '提督' : '舰长'
+                                  const priceRMB = msg.price / 1000 
+                                  
+                                  if (priceRMB < minGiftPrice) return null
+                                  
+                                  return (
+                                      <div key={item.id} className={styles['gift-card']} style={{ borderColor: 'var(--accent-pink)' }}>
+                                          <div className={styles['gift-row-top']}>
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <img 
+                                                    src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                                                    alt="face" 
+                                                    style={{ width: '20px', height: '20px', borderRadius: '50%' }} 
+                                                />
+                                                <span style={{ color: 'var(--accent-yellow)', fontWeight: 'bold' }}>{msg.sender.uname}</span>
+                                              </div>
+                                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                                  <span style={{ color: 'var(--text-secondary)' }}>{moment(msg.timestamp*1000).format('HH:mm:ss')}</span>
+                                                  <span style={{ color: 'var(--accent-pink)', fontWeight: 'bold', fontSize: '12px' }}>￥{priceRMB}</span>
+                                              </div>
+                                          </div>
+                                          <div className={styles['gift-row-bot']}>
+                                              <span style={{ color: 'var(--text-secondary)' }}>开通了</span>
+                                              <span className={styles['gift-name']}>{guardName}</span>
+                                              <span style={{ fontWeight: 'bold' }}>x {msg.num}{msg.unit}</span>
+                                          </div>
+                                      </div>
+                                  )
+                              }
+
                               const config = giftMap[msg.gift_info.id]
                               
-                              // Calculate Value
+                              // 计算价值
                               let valueRMB = 0
                               let valueText = ''
-                              // Prefer config, fallback to msg.gift_info.price
+                              // 优先使用配置，回退到 msg.gift_info.price
                               const price = config ? config.price : msg.gift_info.price
-                              const coinType = config ? config.coin_type : (msg.gift_info.price > 0 ? 'gold' : 'silver') // Assumption
+                              const coinType = config ? config.coin_type : (msg.gift_info.price > 0 ? 'gold' : 'silver') // 假设
                               
                               if (price > 0) {
                                   const total = price * msg.num
                                   if (coinType === 'gold') {
-                                      // 1000 Gold = 1 RMB
+                                      // 1000 金瓜子 = 1 人民币
                                       valueRMB = total / 1000
                                       valueText = `￥${valueRMB >= 1 ? valueRMB.toFixed(1) : valueRMB}` 
                                   } else {
-                                      // Silver or unknown
+                                      // 银瓜子或未知
                                       // valueText = `${total} Silver`
                                   }
                               }
 
-                              // Filter Logic
+                              // 过滤逻辑
                               if (valueRMB < minGiftPrice) return null
 
                               return (
@@ -860,7 +894,7 @@ export default function HomePage() {
       )
   }
 
-  // Room Selection View (Logged in but not connected)
+  // 房间选择视图（已登录但未连接）
   return (
     <React.Fragment>
       <Head>

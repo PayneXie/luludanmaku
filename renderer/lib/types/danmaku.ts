@@ -121,6 +121,24 @@ export class GuardMessage {
   guard_level: number
   price: number
   timestamp: number
+
+  constructor(body: any) {
+    this.sender = new Sender()
+    this.id = body.data.payflow_id
+    this.room = body.roomid || 0 // Sometimes roomid might be missing or in a different place, safe fallback
+    
+    // Sender info
+    this.sender.uid = body.data.uid
+    this.sender.uname = body.data.username
+    // Guard message usually doesn't have face in the root data, might need to fetch or leave empty
+    this.sender.face = '' 
+
+    this.num = body.data.num
+    this.unit = body.data.unit
+    this.guard_level = body.data.guard_level
+    this.price = body.data.price
+    this.timestamp = body.data.start_time
+  }
 }
 
 export class SuperChatMessage {
