@@ -2,34 +2,54 @@ import WebSocket from 'ws'
 import pako from 'pako'
 import brotli from 'brotli'
 
-const MessageOP = {
-  KEEP_ALIVE: 2,
-  KEEP_ALIVE_REPLY: 3,
-  SEND_MSG: 4,
-  SEND_MSG_REPLY: 5,
-  AUTH: 7,
-  AUTH_REPLY: 8,
+export type WsInfo = {
+  server: string
+  room_id: number
+  uid: number
+  token: string
 }
 
-const WsBodyVer = {
-  NORMAL: 0,
-  HEARTBEAT: 1,
-  DEFLATE: 2,
-  BROTLI: 3,
+export type PackResult = {
+  packetLen: number
+  headerLen: number
+  ver: number
+  op: number
+  seq: number
+  body: any[]
+}
+
+export enum MessageOP {
+  KEEP_ALIVE = 2,
+  KEEP_ALIVE_REPLY = 3,
+  SEND_MSG = 4,
+  SEND_MSG_REPLY = 5,
+  AUTH = 7,
+  AUTH_REPLY = 8,
+}
+
+export enum WsBodyVer {
+  NORMAL = 0,
+  HEARTBEAT = 1,
+  DEFLATE = 2,
+  BROTLI = 3,
 }
 
 class BiliWsMessage {
-  constructor(op, str) {
+  private _buffer: Uint8Array
+  private _text_encoder: TextEncoder
+  private _text_decoder: TextDecoder
+
+  constructor(op?: number, str?: string) {
     this._text_encoder = new TextEncoder()
     this._text_decoder = new TextDecoder()
     if (!op) {
-      this._buffer = new Uint8Array()
+      this._buffer = new Uint8Array(0)
       return
     }
     const header = new Uint8Array([
       0, 0, 0, 0, 0, 16, 0, 1, 0, 0, 0, op, 0, 0, 0, 1,
     ])
-    const data = this._text_encoder.encode(str)
+    const data = this._text_encoder.encode(str || '')
     const packet_len = header.length + data.byteLength
     // Set data into buffer
     this._buffer = new Uint8Array(packet_len)
@@ -39,7 +59,7 @@ class BiliWsMessage {
     this.writeInt(this._buffer, 0, 4, packet_len)
   }
 
-  SetBuffer(buffer) {
+  SetBuffer(buffer: Uint8Array) {
     this._buffer = buffer
     return this
   }
@@ -49,8 +69,8 @@ class BiliWsMessage {
   }
 
   // ToPack decodes buffer into PackResult
-  ToPack() {
-    const result = {
+  ToPack(): PackResult {
+    const result: PackResult = {
       packetLen: 0,
       headerLen: 0,
       ver: 0,
@@ -100,9 +120,9 @@ class BiliWsMessage {
           }
           case WsBodyVer.DEFLATE: {
             try {
-              const next_buffer = pako.inflate(
-                this._buffer.slice(result.headerLen, result.packetLen)
-              )
+              const bufferSlice = this._buffer.slice(result.headerLen, result.packetLen)
+              // pako.inflate returns Uint8Array or string based on options, default is Uint8Array
+              const next_buffer = pako.inflate(bufferSlice) as Uint8Array 
               console.log(`[Socket] Inflated size: ${next_buffer.length}`)
               result.body = this.parseDecompressed(next_buffer)
             } catch (e) {
@@ -139,7 +159,7 @@ class BiliWsMessage {
     return result
   }
 
-  parseDecompressed(buffer) {
+  parseDecompressed(buffer: Uint8Array) {
     let bodys = []
     let offset = 0
     // Buffer might be a Node Buffer or Uint8Array, handle generic array-like
@@ -172,7 +192,7 @@ class BiliWsMessage {
     return bodys
   }
 
-  readInt(buffer, start, len) {
+  readInt(buffer: Uint8Array, start: number, len: number) {
     let result = 0
     for (let i = len - 1; i >= 0; i--) {
       result += Math.pow(256, len - i - 1) * buffer[start + i]
@@ -180,7 +200,7 @@ class BiliWsMessage {
     return result
   }
 
-  writeInt(buffer, start, len, value) {
+  writeInt(buffer: Uint8Array, start: number, len: number, value: number) {
     let i = 0
     while (i < len) {
       buffer[start + i] = value / Math.pow(256, len - i - 1)
@@ -189,8 +209,12 @@ class BiliWsMessage {
   }
 }
 
-class BiliWebSocket {
-  constructor(ws_info, onMessage) {
+export class BiliWebSocket {
+  private _ws_info: WsInfo
+  public ws: BiliInternalWebSocket
+  private _is_manual_close: boolean
+
+  constructor(ws_info: WsInfo, onMessage: (packet: PackResult) => void) {
     this._ws_info = ws_info
     this.ws = new BiliInternalWebSocket(this._ws_info)
     this.ws.close_handler = this.reconnect.bind(this)
@@ -223,7 +247,13 @@ class BiliWebSocket {
 }
 
 class BiliInternalWebSocket {
-  constructor(ws_info) {
+  private _ws_info: WsInfo
+  private _ws: WebSocket | null
+  private _heartbeat_task: any // NodeJS.Timeout
+  public msg_handler: ((packet: PackResult) => void) | null
+  public close_handler: (() => void) | null
+
+  constructor(ws_info: WsInfo) {
     this._ws_info = ws_info
     this._ws = null
     this._heartbeat_task = null
@@ -252,12 +282,12 @@ class BiliInternalWebSocket {
         MessageOP.AUTH,
         JSON.stringify(auth_info)
       )
-      this._ws.send(auth_msg.GetBuffer())
+      this._ws!.send(auth_msg.GetBuffer())
 
       // Setup task for heart beating
       const heart_msg = new BiliWsMessage(MessageOP.KEEP_ALIVE, '')
       const heartBuffer = heart_msg.GetBuffer()
-      this._ws.send(heartBuffer)
+      this._ws!.send(heartBuffer)
       console.log('[Socket] Initial Heartbeat sent')
 
       this._heartbeat_task = setInterval(() => {
@@ -269,7 +299,7 @@ class BiliInternalWebSocket {
       }, 30 * 1000)
     })
 
-    this._ws.on('message', (data) => {
+    this._ws.on('message', (data: any) => {
       const msg = new BiliWsMessage().SetBuffer(new Uint8Array(data))
       if (this.msg_handler) {
         this.msg_handler(msg.ToPack())
@@ -287,7 +317,7 @@ class BiliInternalWebSocket {
       }
     })
     
-    this._ws.on('error', (err) => {
+    this._ws.on('error', (err: Error) => {
       console.error('Websocket error', err)
     })
   }
@@ -303,5 +333,3 @@ class BiliInternalWebSocket {
     }
   }
 }
-
-export { BiliWebSocket }

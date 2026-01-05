@@ -1,3 +1,21 @@
+/**
+ * Example utility function
+ * @param {string} name
+ * @returns {string}
+ */
+export const formatGreeting = (name: string): string => {
+  return `Hello, ${name}!`
+}
+
+/**
+ * Class name joiner
+ * @param {...string} classes
+ * @returns {string}
+ */
+export const cn = (...classes: (string | undefined | null | false)[]) => {
+  return classes.filter(Boolean).join(' ')
+}
+
 export function levelToName(level: number) {
   switch (level) {
     case 1:

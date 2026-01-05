@@ -11,14 +11,14 @@ const mixinKeyEncTab = [
 ]
 
 // 对 imgKey 和 subKey 进行字符顺序打乱编码
-const getMixinKey = (orig) =>
+const getMixinKey = (orig: string) =>
   mixinKeyEncTab
     .map((n) => orig[n])
     .join('')
     .slice(0, 32)
 
 // 为请求参数进行 wbi 签名
-function encWbi(params, img_key, sub_key) {
+function encWbi(params: Record<string, any>, img_key: string, sub_key: string) {
   const mixin_key = getMixinKey(img_key + sub_key),
     curr_time = Math.round(Date.now() / 1000),
     chr_filter = /[!'()*]/g
@@ -39,8 +39,13 @@ function encWbi(params, img_key, sub_key) {
   return query + '&w_rid=' + wbi_sign
 }
 
+interface WbiKeys {
+  img_key: string
+  sub_key: string
+}
+
 // 获取最新的 img_key 和 sub_key
-async function getWbiKeys(cookiesStr) {
+async function getWbiKeys(cookiesStr?: string): Promise<WbiKeys> {
   return new Promise((resolve, reject) => {
     const options = {
       hostname: 'api.bilibili.com',
@@ -90,10 +95,10 @@ async function getWbiKeys(cookiesStr) {
   })
 }
 
-let web_keys = null
+let web_keys: WbiKeys | null = null
 let last_update_time = 0
 
-export default async function wbi_sign(param, cookiesStr) {
+export default async function wbi_sign(param: Record<string, any>, cookiesStr?: string) {
   const now = Date.now()
   // Cache keys for a while (e.g. 10 minutes) or fetch if null
   if (!web_keys || now - last_update_time > 600 * 1000) {
@@ -105,7 +110,7 @@ export default async function wbi_sign(param, cookiesStr) {
         if (!web_keys) throw e
     }
   }
-  const img_key = web_keys.img_key,
-    sub_key = web_keys.sub_key
+  const img_key = web_keys!.img_key,
+    sub_key = web_keys!.sub_key
   return encWbi(param, img_key, sub_key)
 }

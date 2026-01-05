@@ -25,6 +25,10 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "@types/md5": "^2.3.6",
+    "@types/pako": "^2.0.4",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
     "electron": "^34.0.0",
     "electron-builder": "^24.13.3",
     "next": "^14.2.4",

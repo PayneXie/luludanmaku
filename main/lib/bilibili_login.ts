@@ -1,5 +1,7 @@
 import https from 'https'
 import querystring from 'querystring'
+import { v4 as uuidv4 } from 'uuid'
+import wbi_sign from './wbi'
 
 export const QrCodeStatus = {
   NeedScan: 0,
@@ -7,7 +9,25 @@ export const QrCodeStatus = {
   Success: 2,
 }
 
-export function GetNewQrCode() {
+export interface BiliCookies {
+  SESSDATA?: string
+  DedeUserID?: string
+  DedeUserID__ckMd5?: string
+  bili_jct?: string
+  [key: string]: string | undefined
+}
+
+export interface QrCodeResult {
+  url: string
+  oauthKey: string
+}
+
+export interface CheckQrResult {
+  status: number
+  cookies?: BiliCookies
+}
+
+export function GetNewQrCode(): Promise<QrCodeResult> {
   return new Promise((resolve, reject) => {
     https.get(
       'https://passport.bilibili.com/x/passport-login/web/qrcode/generate',
@@ -35,7 +55,7 @@ export function GetNewQrCode() {
   })
 }
 
-export function CheckQrCodeStatus(oauthKey) {
+export function CheckQrCodeStatus(oauthKey: string): Promise<CheckQrResult> {
   return new Promise((resolve, reject) => {
     const postOptions = {
       hostname: 'passport.bilibili.com',
@@ -55,7 +75,7 @@ export function CheckQrCodeStatus(oauthKey) {
           let resp = JSON.parse(dd)
           if (resp['data']['code'] === 0) {
             let url = resp['data']['url']
-            let params = querystring.parse(url.split('?')[1])
+            let params = querystring.parse(url.split('?')[1]) as unknown as BiliCookies
             resolve({
               status: QrCodeStatus.Success,
               cookies: params,
@@ -85,7 +105,7 @@ export function CheckQrCodeStatus(oauthKey) {
   })
 }
 
-export function cookiesToString(cookies) {
+export function cookiesToString(cookies: BiliCookies): string {
   let cookieStr = ''
   if (cookies.SESSDATA) {
       cookieStr += 'SESSDATA=' + encodeURIComponent(cookies.SESSDATA) + ';'
@@ -102,7 +122,7 @@ export function cookiesToString(cookies) {
   return cookieStr
 }
 
-export function Logout(cookies) {
+export function Logout(cookies: BiliCookies) {
   return new Promise((resolve, reject) => {
     let postData = 'biliCSRF=' + cookies.bili_jct
     let postOptions = {
@@ -138,14 +158,12 @@ export function Logout(cookies) {
   })
 }
 
-import wbi_sign from './wbi'
-
-export function GetDanmuInfo(cookies, roomId) {
+export function GetDanmuInfo(cookies: BiliCookies | null, roomId: number): Promise<any> {
   return new Promise(async (resolve, reject) => {
     const cookieStr = cookies ? cookiesToString(cookies) : ''
     
     // Use WBI sign for parameters
-    let params = {
+    let params: any = {
       id: roomId,
       type: 0
     }
@@ -158,8 +176,8 @@ export function GetDanmuInfo(cookies, roomId) {
         queryString = `id=${roomId}&type=0` // fallback
     }
 
-    const headers = {
-        cookie: cookieStr + (cookies && !cookieStr.includes('buvid3') ? ' buvid3=' + require('uuid').v4() + 'infoc;' : ''),
+    const headers: any = {
+        cookie: cookieStr + (cookies && !cookieStr.includes('buvid3') ? ' buvid3=' + uuidv4() + 'infoc;' : ''),
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': `https://live.bilibili.com/${roomId}`,
         'Origin': 'https://live.bilibili.com'

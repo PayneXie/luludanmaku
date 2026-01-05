@@ -1,13 +1,13 @@
-import { screen, BrowserWindow } from 'electron'
+import { screen, BrowserWindow, BrowserWindowConstructorOptions, Rectangle } from 'electron'
 import Store from 'electron-store'
 
-export const createWindow = (windowName, options) => {
+export const createWindow = (windowName: string, options: BrowserWindowConstructorOptions): BrowserWindow => {
   const key = 'window-state'
   const name = `window-state-${windowName}`
   const store = new Store({ name })
   const defaultSize = {
-    width: options.width,
-    height: options.height,
+    width: options.width || 800,
+    height: options.height || 600,
   }
   let state = {}
 
@@ -24,7 +24,7 @@ export const createWindow = (windowName, options) => {
     }
   }
 
-  const windowWithinBounds = (windowState, bounds) => {
+  const windowWithinBounds = (windowState: any, bounds: Rectangle) => {
     return (
       windowState.x >= bounds.x &&
       windowState.y >= bounds.y &&
@@ -41,7 +41,7 @@ export const createWindow = (windowName, options) => {
     })
   }
 
-  const ensureVisibleOnSomeDisplay = (windowState) => {
+  const ensureVisibleOnSomeDisplay = (windowState: any) => {
     const visible = screen.getAllDisplays().some((display) => {
       return windowWithinBounds(windowState, display.bounds)
     })
@@ -62,7 +62,7 @@ export const createWindow = (windowName, options) => {
 
   state = ensureVisibleOnSomeDisplay(restore())
 
-  const win = new BrowserWindow({
+  const browserOptions: BrowserWindowConstructorOptions = {
     ...state,
     ...options,
     webPreferences: {
@@ -70,7 +70,9 @@ export const createWindow = (windowName, options) => {
       contextIsolation: true,
       ...options.webPreferences,
     },
-  })
+  }
+
+  const win = new BrowserWindow(browserOptions)
 
   win.on('close', saveState)
 

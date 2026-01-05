@@ -2,11 +2,11 @@ import path from 'path'
 import { app, ipcMain, Menu, BrowserWindow } from 'electron'
 import serve from 'electron-serve'
 import { createWindow } from './helpers'
-import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo } from './lib/bilibili_login'
-import { BiliWebSocket } from './lib/bilibili_socket'
+import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo, BiliCookies } from './lib/bilibili_login'
+import { BiliWebSocket, WsInfo, PackResult } from './lib/bilibili_socket'
 
 const isProd = process.env.NODE_ENV === 'production'
-let activeBiliSocket = null
+let activeBiliSocket: BiliWebSocket | null = null
 
 if (isProd) {
   serve({ directory: 'app' })
@@ -34,7 +34,7 @@ if (isProd) {
   }
 
   // Debug Menu
-  const menuTemplate = [
+  const menuTemplate: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'Debug Tools',
       submenu: [
@@ -220,7 +220,7 @@ ipcMain.handle('bilibili-get-qrcode', async () => {
   try {
     const result = await GetNewQrCode()
     return { success: true, data: result }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to get QR code:', error)
     return { success: false, error: error.message }
   }
@@ -230,20 +230,20 @@ ipcMain.handle('bilibili-check-qrcode', async (event, oauthKey) => {
   try {
     const result = await CheckQrCodeStatus(oauthKey)
     return { success: true, data: result }
-  } catch (error) {
+  } catch (error: any) {
     // console.error('Failed to check QR code:', error)
     return { success: false, error: error.message || error }
-   }
+  }
  })
 
-ipcMain.on('bilibili-connect-socket', (event, wsInfo) => {
+ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
   if (activeBiliSocket) {
     activeBiliSocket.Disconnect()
     activeBiliSocket = null
   }
   
   try {
-    activeBiliSocket = new BiliWebSocket(wsInfo, (packet) => {
+    activeBiliSocket = new BiliWebSocket(wsInfo, (packet: PackResult) => {
        // Filter for DANMU_MSG or other interest
        packet.body.forEach(msg => {
           // console.log('Forwarding MSG:', msg.cmd) // Debug
@@ -391,11 +391,11 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
   }
 })
 
-ipcMain.handle('bilibili-get-danmu-info', async (event, { cookies, roomId }) => {
+ipcMain.handle('bilibili-get-danmu-info', async (event, { cookies, roomId }: { cookies: BiliCookies, roomId: number }) => {
   try {
     const result = await GetDanmuInfo(cookies, roomId)
     return { success: true, data: result }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to get Danmu info:', error)
     return { success: false, error: error.message || error }
   }
@@ -410,7 +410,7 @@ ipcMain.handle('bilibili-get-gift-config', async (event, { roomId }) => {
         throw new Error(json.message || 'Failed to fetch gift config')
     }
     return { success: true, data: json.data }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to get gift config:', error)
     return { success: false, error: error.message || error }
   }
