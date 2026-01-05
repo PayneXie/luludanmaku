@@ -463,6 +463,7 @@ export default function HomePage() {
                             color: showDebug ? '#333' : '#666',
                             border: '1px solid transparent',
                             borderRadius: '4px',
+                            outline: 'none',
                             transition: 'all 0.2s',
                             display: 'flex',
                             alignItems: 'center',
@@ -577,6 +578,7 @@ export default function HomePage() {
                             color: '#ff4d4f', // 红色表示断开连接
                             border: '1px solid transparent',
                             borderRadius: '4px',
+                            outline: 'none',
                             transition: 'all 0.2s',
                             display: 'flex',
                             alignItems: 'center',
@@ -611,9 +613,24 @@ export default function HomePage() {
                           {danmuList.filter(item => item.type === 'msg' || item.type === 'system').slice().reverse().map(item => {
                               if (item.type === 'msg') {
                                   const msg = item.data
-                                  const isGuard = msg.sender.medal_info && msg.sender.medal_info.guard_level > 0
+                                  const guardLevel = msg.sender.medal_info ? msg.sender.medal_info.guard_level : 0
+                                  const isGuard = guardLevel > 0
+                                  
+                                  // 会员背景色
+                                  // 舰长(3): 淡蓝色 (保持一致)
+                                  // 提督(2): 淡紫色
+                                  // 总督(1): 淡金色
+                                  let bgColor = 'transparent'
+                                  if (guardLevel === 3) bgColor = 'rgba(0, 176, 255, 0.15)'   // 舰长 (Light Blue)
+                                  if (guardLevel === 2) bgColor = 'rgba(224, 64, 251, 0.2)'   // 提督 (Purple)
+                                  if (guardLevel === 1) bgColor = 'rgba(255, 215, 0, 0.25)'   // 总督 (Gold)
+
                                   return (
-                                    <div key={item.id} className={styles['danmu-item']}>
+                                    <div 
+                                        key={item.id} 
+                                        className={styles['danmu-item']}
+                                        style={{ backgroundColor: bgColor }}
+                                    >
                                         {/* 勋章 */}
                                         {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
                                             <span 
@@ -812,8 +829,17 @@ export default function HomePage() {
                                   
                                   if (priceRMB < minGiftPrice) return null
                                   
+                                  const isHighValue = priceRMB > 500
+
                                   return (
-                                      <div key={item.id} className={styles['gift-card']} style={{ borderColor: 'var(--accent-pink)' }}>
+                                      <div 
+                                        key={item.id} 
+                                        className={styles['gift-card']} 
+                                        style={{ 
+                                            borderColor: 'var(--accent-pink)',
+                                            backgroundColor: isHighValue ? 'rgba(255, 183, 178, 0.25)' : 'transparent'
+                                        }}
+                                      >
                                           <div className={styles['gift-row-top']}>
                                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <img 
@@ -861,8 +887,16 @@ export default function HomePage() {
                               // 过滤逻辑
                               if (valueRMB < minGiftPrice) return null
 
+                              const isHighValue = valueRMB > 500
+
                               return (
-                                  <div key={item.id} className={styles['gift-card']}>
+                                  <div 
+                                    key={item.id} 
+                                    className={styles['gift-card']}
+                                    style={{
+                                        backgroundColor: isHighValue ? 'rgba(255, 246, 143, 0.3)' : 'transparent'
+                                    }}
+                                  >
                                       <div className={styles['gift-row-top']}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <img 

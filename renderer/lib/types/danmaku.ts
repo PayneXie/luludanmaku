@@ -20,7 +20,7 @@ export class DanmuMessage {
     // TODO maybe need the backend service to offer a face cache
     this.sender.face = ''
 
-    const extra_info = body.info[0][15] as DmExtraInfo
+    const extra_info = body.info[0][15] || {}
     if (extra_info.show_reply && extra_info.reply_uname != '') {
       this.reply_uname = extra_info.reply_uname
     }

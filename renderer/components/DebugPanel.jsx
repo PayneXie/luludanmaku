@@ -12,12 +12,38 @@ export default function DebugPanel({ onClose }) {
     content: 'Test Content',
     price: 30,
     giftName: '辣条',
+    giftPrice: 100, // 金瓜子
     num: 1,
     guardLevel: 3 // 1:总督, 2:提督, 3:舰长
   })
 
+  const GIFT_OPTIONS = [
+    { name: '辣条', price: 100, label: '辣条 (0.1元)' },
+    { name: '小心心', price: 0, label: '小心心 (免费)' },
+    { name: '牛哇牛哇', price: 1000, label: '牛哇牛哇 (1元)' },
+    { name: '打call', price: 5000, label: '打call (5元)' },
+    { name: 'B坷垃', price: 9900, label: 'B坷垃 (9.9元)' },
+    { name: '告白气球', price: 52000, label: '告白气球 (52元)' },
+    { name: '火箭', price: 100000, label: '火箭 (100元)' },
+    { name: '摩天大楼', price: 450000, label: '摩天大楼 (450元)' },
+    { name: '小电视飞船', price: 1245000, label: '小电视飞船 (1245元)' }
+  ]
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
+  }
+
+  const handleGiftChange = (e) => {
+    const selected = GIFT_OPTIONS.find(g => g.name === e.target.value)
+    if (selected) {
+        setFormData({ 
+            ...formData, 
+            giftName: selected.name, 
+            giftPrice: selected.price 
+        })
+    } else {
+        setFormData({ ...formData, giftName: e.target.value })
+    }
   }
 
   const handleSend = () => {
@@ -136,15 +162,31 @@ export default function DebugPanel({ onClose }) {
         </div>
 
         {activeTab === 'danmu' && (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>内容</label>
-                <textarea 
-                    name="content" 
-                    value={formData.content} 
-                    onChange={handleChange}
-                    style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd', minHeight: '60px' }}
-                />
-            </div>
+            <>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>发送者身份</label>
+                    <select
+                        name="senderGuardLevel"
+                        value={formData.senderGuardLevel}
+                        onChange={handleChange}
+                        style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd', marginBottom: '8px' }}
+                    >
+                        <option value={0}>普通用户</option>
+                        <option value={3}>舰长</option>
+                        <option value={2}>提督</option>
+                        <option value={1}>总督</option>
+                    </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>内容</label>
+                    <textarea 
+                        name="content" 
+                        value={formData.content} 
+                        onChange={handleChange}
+                        style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd', minHeight: '60px' }}
+                    />
+                </div>
+            </>
         )}
 
         {activeTab === 'sc' && (
@@ -174,10 +216,24 @@ export default function DebugPanel({ onClose }) {
         {activeTab === 'gift' && (
             <>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>礼物名称</label>
+                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>礼物选择</label>
+                    <select
+                        name="giftName"
+                        value={formData.giftName}
+                        onChange={handleGiftChange}
+                        style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd', marginBottom: '8px' }}
+                    >
+                        {GIFT_OPTIONS.map(g => (
+                            <option key={g.name} value={g.name}>{g.label}</option>
+                        ))}
+                    </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>单价 (金瓜子, 1000=1元)</label>
                     <input 
-                        name="giftName" 
-                        value={formData.giftName} 
+                        type="number"
+                        name="giftPrice" 
+                        value={formData.giftPrice} 
                         onChange={handleChange}
                         style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }}
                     />

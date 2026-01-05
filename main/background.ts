@@ -278,13 +278,20 @@ ipcMain.on('bilibili-disconnect-socket', () => {
 // Debug IPC for custom messages
 ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
   if (type === 'danmu') {
+     const senderGuardLevel = Number(data.senderGuardLevel) || 0
      const mockMsg = {
         cmd: 'DANMU_MSG',
         info: [
-           [0,1,25,16777215,1704380000,0,0,""], 
+           // info[0]: [0, 1, 25, 16777215, 1704380000, 0, 0, "", 0, 0, 0, 0, 0, {}, {}, { ... }]
+           [
+             0, 1, 25, 16777215, 1704380000, 0, 0, "", 0, 0, 0, 0, 0, 
+             {}, // 13: emoji_content (null or object)
+             {}, // 14: real_name?
+             { "user_hash": "0", "log_id": "0", "reply_uname": "" } // 15: extra_info
+           ], 
            data.content || "Test Danmaku", 
            [12345, data.uname || "TestUser", 0, 0, 0, 10000, 1, ""], 
-           [5, "TestMedal", "TestAnchor", 123, 0x5896de, "", 0, 6809855, 2951253, 10329087, 3, 1], 
+           [5, "TestMedal", "TestAnchor", 123, 0x5896de, "", 0, 6809855, 2951253, 10329087, senderGuardLevel, 1], 
            [0,0,9868950,">50000"], 
            ["title-531-1", "title-531-1"], 
            0, 0, null, { "ts": 1704380000, "ct": "A76F3C90" }, 0, 0, null, null, 0, 210
@@ -333,6 +340,11 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
     }
     event.reply('danmu-message', mockSC)
   } else if (type === 'gift') {
+    const giftPrice = Number(data.giftPrice) || 100
+    const num = Number(data.num) || 1
+    // Use a random ID to avoid collision with real gift config (which might force coin_type to silver)
+    const randomGiftId = 99000 + Math.floor(Math.random() * 1000)
+    
     const mockGift = {
         cmd: 'SEND_GIFT',
         data: {
@@ -347,16 +359,16 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
             combo_resources_id: 1,
             combo_send: null,
             combo_stay_time: 5,
-            combo_total_coin: 100,
+            combo_total_coin: giftPrice * num,
             crit_prob: 0,
             demarcation: 1,
-            discount_price: 100,
+            discount_price: giftPrice,
             dmscore: 28,
             draw_gift: null,
             effect: 0,
             effect_block: 1,
             face: "https://i0.hdslb.com/bfs/face/member/noface.jpg",
-            giftId: 1,
+            giftId: randomGiftId,
             giftName: data.giftName || "辣条",
             giftType: 0,
             gold: 0,
@@ -366,9 +378,9 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
             magnification: 1,
             medal_info: null,
             name_color: "",
-            num: Number(data.num) || 1,
+            num: num,
             original_gift_name: "",
-            price: 100,
+            price: giftPrice,
             rcost: 22756804,
             remain: 0,
             rnd: "1704380000",
@@ -380,9 +392,9 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
             svga_resources: "",
             tag_image: "",
             tid: "1704380000",
-            timestamp: 1704380000,
+            timestamp: Math.floor(Date.now() / 1000),
             top_list: null,
-            total_coin: 100,
+            total_coin: giftPrice * num,
             uid: 12345,
             uname: data.uname || "TestGift_User"
         }
