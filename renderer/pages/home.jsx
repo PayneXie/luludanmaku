@@ -815,6 +815,13 @@ export default function HomePage() {
       return '#61c05a' // 默认
   }
 
+  const getGuardIcon = (level) => {
+      if (level === 1) return level1.src
+      if (level === 2) return level2.src
+      if (level === 3) return level3.src
+      return level3.src
+  }
+
   // 自动滚动/置顶逻辑
   useEffect(() => {
     // 现在的列表顺序是 [New, Old...]
@@ -1853,7 +1860,7 @@ export default function HomePage() {
                           </div>
                       </div>
                       <div className={styles['col-content']}>
-                          {danmuList.filter(item => item.type === 'gift' && shouldShowItem(item)).slice().reverse().map(item => {
+                          {giftList.filter(item => item.type === 'gift' && shouldShowItem(item)).map(item => {
                               const msg = item.data
                               const isRead = readMessages.has(item.id)
                               const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
