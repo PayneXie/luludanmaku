@@ -748,7 +748,7 @@ export default function HomePage() {
             }}
           >
               {/* 头部 */}
-              <div className={styles['console-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', backgroundColor: '#fff', borderBottom: '1px solid #eee' }}>
+              <div className={styles['console-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', backgroundColor: '#fff', borderBottom: '1px solid #eee', fontFamily: '"Microsoft YaHei", sans-serif' }}>
                   <div className={styles['room-info']} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       {/* 用户头像 */}
                       {userInfo?.face && (
