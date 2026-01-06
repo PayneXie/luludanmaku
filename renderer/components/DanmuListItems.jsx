@@ -92,7 +92,20 @@ export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onU
               
               {/* 内容 (允许换行) */}
               <span style={{ wordBreak: 'break-word', lineHeight: '1.5' }}>
-                  <Linkify>{msg.content}</Linkify>
+                  {msg.emoji_content ? (
+                      <img 
+                          src={msg.emoji_content.url}
+                          alt="emoji"
+                          style={{
+                              height: 'calc((var(--danmu-size) + 32px) * 0.5)',
+                              width: 'auto',
+                              verticalAlign: 'middle',
+                              display: 'inline-block'
+                          }}
+                      />
+                  ) : (
+                      <Linkify>{msg.content}</Linkify>
+                  )}
               </span>
           </div>
         )

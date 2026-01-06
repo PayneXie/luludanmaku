@@ -1219,6 +1219,8 @@ export default function HomePage() {
                           <img 
                               src={userInfo.face} 
                               alt="avatar" 
+                              referrerPolicy="no-referrer"
+                              onError={(e) => { e.target.src = 'https://i0.hdslb.com/bfs/face/member/noface.jpg' }}
                               style={{ width: '44px', height: '44px', borderRadius: '50%', border: '2px solid #f0f0f0' }} 
                           />
                       )}
@@ -2151,6 +2153,8 @@ export default function HomePage() {
                             <img 
                                 src={userInfo.face} 
                                 alt="avatar" 
+                                referrerPolicy="no-referrer"
+                                onError={(e) => { e.target.src = 'https://i0.hdslb.com/bfs/face/member/noface.jpg' }}
                                 style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} 
                             />
                         )}

@@ -20,6 +20,9 @@
   --sc-level-4: #f76868; /* 500-1000 */
   --sc-level-5: #c42742; /* 1000-2000 */
   --sc-level-6: #ab1a32; /* > 2000 */
+  
+  --danmu-size: 24px;
+  
   /* Scrollbar */
   scrollbar-width: thin;
   scrollbar-color: var(--bg-tertiary) var(--bg-primary);
