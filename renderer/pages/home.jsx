@@ -20,6 +20,52 @@ import level1 from '../public/images/level1.png'
 import level2 from '../public/images/level2.png'
 import level3 from '../public/images/level3.png'
 
+const TitleBar = ({ title, onToggleBorderless, isBorderlessActive }) => (
+  <div style={{
+    height: '32px',
+    background: '#f8f9fa', // 将会被覆盖或合并，保持默认
+    borderBottom: '1px solid #dee2e6',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0 0 0 8px',
+    WebkitAppRegion: 'drag',
+    userSelect: 'none',
+    flexShrink: 0,
+    width: '100%',
+    boxSizing: 'border-box',
+    borderTopLeftRadius: '6px',
+    borderTopRightRadius: '6px'
+  }}>
+      <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', marginLeft: '8px', pointerEvents: 'none' }}>
+        {title || 'Luludanmaku'}
+      </div>
+      <div style={{ display: 'flex', WebkitAppRegion: 'no-drag', height: '100%' }}>
+        {onToggleBorderless && (
+          <button 
+              onClick={onToggleBorderless} 
+              title={isBorderlessActive ? "退出无边框模式" : "无边框模式"}
+              className={styles['title-bar-btn']}
+          >
+               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="9" y1="3" x2="9" y2="21"></line>
+              </svg>
+          </button>
+        )}
+        <button onClick={() => window.ipc.send('window-min')} className={styles['title-bar-btn']} title="最小化">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+        <button onClick={() => window.ipc.send('window-max')} className={styles['title-bar-btn']} title="最大化">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+        </button>
+        <button onClick={() => window.ipc.send('window-close')} className={styles['title-bar-btn-close']} title="关闭">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+)
+
 export default function HomePage() {
   const [qrImage, setQrImage] = useState('')
   const [status, setStatus] = useState('初始化中...')
@@ -29,7 +75,12 @@ export default function HomePage() {
   // 弹幕状态
   const [roomId, setRoomId] = useState('')
   const [danmuStatus, setDanmuStatus] = useState('Disconnected')
-  const [danmuList, setDanmuList] = useState([])
+  
+  // 数据列表拆分
+  const [danmuList, setDanmuList] = useState([]) // 普通弹幕 + 系统消息 (限制长度)
+  const [scList, setScList] = useState([])       // 醒目留言 (保留所有)
+  const [giftList, setGiftList] = useState([])   // 礼物 + 舰长 (保留所有)
+  
   const danmuListRef = useRef(null)
   
   // 房间信息（标题、状态等）
@@ -115,10 +166,24 @@ export default function HomePage() {
   
   // 窗口状态
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false)
+  const [isBorderless, setIsBorderless] = useState(false) // 无边框模式状态
+
   const toggleAlwaysOnTop = () => {
       const newState = !isAlwaysOnTop
       setIsAlwaysOnTop(newState)
       window.ipc.send('window-set-always-on-top', newState)
+  }
+
+  const toggleBorderlessMode = () => {
+      const newState = !isBorderless
+      setIsBorderless(newState)
+      if (newState) {
+          // Enter Borderless: Resize to narrow strip
+          window.ipc.send('window-set-size', { width: 320, height: 700, animate: true })
+      } else {
+          // Exit Borderless: Restore size
+          window.ipc.send('window-set-size', { width: 1000, height: 600, animate: true })
+      }
   }
   
   // 界面设置
@@ -177,14 +242,13 @@ export default function HomePage() {
   const handleMarkAllRead = (type) => {
       setReadMessages(prev => {
           const newSet = new Set(prev)
-          danmuList.forEach(item => {
-              if (
-                  (type === 'superchat' && item.type === 'superchat') || 
-                  (type === 'gift' && item.type === 'gift')
-              ) {
-                  newSet.add(item.id)
-              }
-          })
+          
+          if (type === 'superchat') {
+              scList.forEach(item => newSet.add(item.id))
+          } else if (type === 'gift') {
+              giftList.forEach(item => newSet.add(item.id))
+          }
+          
           return newSet
       })
   }
@@ -192,14 +256,13 @@ export default function HomePage() {
   const handleMarkAllUnread = (type) => {
       setReadMessages(prev => {
           const newSet = new Set(prev)
-          danmuList.forEach(item => {
-              if (
-                  (type === 'superchat' && item.type === 'superchat') || 
-                  (type === 'gift' && item.type === 'gift')
-              ) {
-                  newSet.delete(item.id)
-              }
-          })
+          
+          if (type === 'superchat') {
+              scList.forEach(item => newSet.delete(item.id))
+          } else if (type === 'gift') {
+              giftList.forEach(item => newSet.delete(item.id))
+          }
+
           return newSet
       })
   }
@@ -345,12 +408,23 @@ export default function HomePage() {
       let scTotal = 0
       let giftTotal = 0
       
+      // 统计弹幕数
       danmuList.forEach(item => {
           if (item.type === 'msg') {
               danmuCount++
-          } else if (item.type === 'superchat') {
+          }
+      })
+
+      // 统计 SC
+      scList.forEach(item => {
+          if (item.type === 'superchat') {
               scTotal += item.data.price
-          } else if (item.type === 'gift') {
+          }
+      })
+      
+      // 统计礼物
+      giftList.forEach(item => {
+          if (item.type === 'gift') {
               const msg = item.data
               // 处理舰长
               if (msg instanceof GuardMessage || msg.guard_level) {
@@ -374,7 +448,7 @@ export default function HomePage() {
           scTotal: scTotal, 
           giftTotal: giftTotal
       }
-  }, [danmuList, giftMap])
+  }, [danmuList, scList, giftList, giftMap])
 
   const pollTimer = useRef(null)
 
@@ -455,6 +529,10 @@ export default function HomePage() {
               data: text
           }
           const updated = [...prev, newItem]
+          // 限制最大长度 1000
+          if (updated.length > 1000) {
+              return updated.slice(updated.length - 1000)
+          }
           return updated
       })
   }
@@ -465,6 +543,8 @@ export default function HomePage() {
     
     // 清空之前的列表
     setDanmuList([])
+    setScList([])
+    setGiftList([])
     setOnlineCount(0)
     
     addSystemMessage(`直播间已连接：${roomId}`)
@@ -526,42 +606,52 @@ export default function HomePage() {
              return
          }
 
-         // 根据要求保留所有消息
-         setDanmuList(prev => {
-             const newList = [...prev, { 
-                id: Math.random(), 
-                type: 'msg',
-                data: null // 将在下面设置
-            }]
-            // 由于有不同的类型，应该先构造对象
-            let newItem = null;
-            
-            if (msg.cmd === 'DANMU_MSG') {
-                try {
-                   newItem = { id: Math.random(), type: 'msg', data: new DanmuMessage({ info: msg.info }) }
-                } catch(e) { console.error(e); return prev; }
-            } else if (msg.cmd === 'SEND_GIFT') {
-                try {
-                   newItem = { id: Math.random(), type: 'gift', data: new GiftMessage(msg) }
-                } catch(e) { console.error(e); return prev; }
-            } else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
-                try {
-                   newItem = { id: Math.random(), type: 'superchat', data: new SuperChatMessage(msg) }
-                } catch(e) { console.error(e); return prev; }
-            } else if (msg.cmd === 'USER_TOAST_MSG') {
-                try {
-                   newItem = { id: Math.random(), type: 'gift', data: new GuardMessage(msg) }
-                } catch(e) { console.error(e); return prev; }
-            } else if (msg.cmd === 'SYSTEM_MSG') {
-                   newItem = { id: Math.random(), type: 'system', data: msg.msg }
-            }
+         // 根据消息类型分发到不同的列表
+         let newItem = null;
+         let listType = 'danmu'; // 'danmu' | 'sc' | 'gift'
+         
+         if (msg.cmd === 'DANMU_MSG') {
+             try {
+                newItem = { id: Math.random(), type: 'msg', data: new DanmuMessage({ info: msg.info }) }
+                listType = 'danmu'
+             } catch(e) { console.error(e); return; }
+         } else if (msg.cmd === 'SEND_GIFT') {
+             try {
+                newItem = { id: Math.random(), type: 'gift', data: new GiftMessage(msg) }
+                listType = 'gift'
+             } catch(e) { console.error(e); return; }
+         } else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
+             try {
+                newItem = { id: Math.random(), type: 'superchat', data: new SuperChatMessage(msg) }
+                listType = 'sc'
+             } catch(e) { console.error(e); return; }
+         } else if (msg.cmd === 'USER_TOAST_MSG') {
+             try {
+                newItem = { id: Math.random(), type: 'gift', data: new GuardMessage(msg) }
+                listType = 'gift'
+             } catch(e) { console.error(e); return; }
+         } else if (msg.cmd === 'SYSTEM_MSG') {
+                newItem = { id: Math.random(), type: 'system', data: msg.msg }
+                listType = 'danmu'
+         }
 
-            if (!newItem) return prev;
-            
-            // 保留所有数据
-            const updated = [...prev, newItem]
-            return updated
-         })
+         if (!newItem) return;
+         
+         // 分发更新
+         if (listType === 'danmu') {
+             setDanmuList(prev => {
+                 const updated = [...prev, newItem]
+                 // 限制最大长度 1000
+                 if (updated.length > 1000) {
+                     return updated.slice(updated.length - 1000)
+                 }
+                 return updated
+             })
+         } else if (listType === 'sc') {
+             setScList(prev => [...prev, newItem])
+         } else if (listType === 'gift') {
+             setGiftList(prev => [...prev, newItem])
+         }
       }
       
       // 移除旧监听器以避免重复
@@ -696,28 +786,51 @@ export default function HomePage() {
           <Head>
             <title>哔哩哔哩扫码登录</title>
           </Head>
-          <div className={loginStyles.container}>
-            <div className={loginStyles.card}>
-                <h1 className={loginStyles.title}>哔哩哔哩扫码登录</h1>
-                
-                <div className={loginStyles.qrContainer}>
-                    {qrImage ? (
-                        <img src={qrImage} alt="Login QR Code" className={loginStyles.qrImage} />
-                    ) : (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc' }}>
-                            加载中...
-                        </div>
-                    )}
+          <style global jsx>{`
+            body {
+              margin: 0;
+              padding: 0;
+              overflow: hidden;
+              font-family: "Microsoft YaHei", sans-serif;
+              background-color: transparent;
+            }
+          `}</style>
+          <div style={{ 
+               display: 'flex', 
+               flexDirection: 'column', 
+               height: 'calc(100vh - 8px)', 
+               margin: '4px',
+               background: '#fff',
+               borderRadius: '6px',
+               overflow: 'hidden',
+               border: '1px solid rgba(0,0,0,0.06)',
+               boxShadow: '0 0 6px 0 rgba(0,0,0,0.3)',
+               position: 'relative'
+           }}>
+            <TitleBar title="登录 - Luludanmaku" />
+            <div className={loginStyles.container} style={{ flex: 1, overflow: 'auto' }}>
+                <div className={loginStyles.card}>
+                    <h1 className={loginStyles.title}>哔哩哔哩扫码登录</h1>
+                    
+                    <div className={loginStyles.qrContainer}>
+                        {qrImage ? (
+                            <img src={qrImage} alt="Login QR Code" className={loginStyles.qrImage} />
+                        ) : (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc' }}>
+                                加载中...
+                            </div>
+                        )}
+                    </div>
+                    
+                    <p className={loginStyles.status}>{status}</p>
+                    
+                    <button 
+                    onClick={initLogin}
+                    className={loginStyles.btnRefresh}
+                    >
+                    刷新二维码
+                    </button>
                 </div>
-                
-                <p className={loginStyles.status}>{status}</p>
-                
-                <button 
-                  onClick={initLogin}
-                  className={loginStyles.btnRefresh}
-                >
-                  刷新二维码
-                </button>
             </div>
           </div>
         </React.Fragment>
@@ -734,19 +847,320 @@ export default function HomePage() {
 
   // 已连接视图
   if (danmuStatus.startsWith('Connected')) {
+      if (isBorderless) {
+          return (
+            <React.Fragment>
+              <Head>
+                <title>Danmaku - Borderless</title>
+              </Head>
+              <style global jsx>{`
+                body {
+                  margin: 0;
+                  padding: 0;
+                  overflow: hidden;
+                  font-family: "Microsoft YaHei", sans-serif;
+                  background-color: transparent;
+                }
+              `}</style>
+              <div style={{
+                  height: '100vh',
+                  width: '100%',
+                  backgroundColor: 'rgba(0, 0, 0, 0.2)', // 灰黑色几乎透明
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  position: 'relative'
+              }}>
+                  {/* 顶部拖拽区 */}
+                  <div style={{
+                      height: '24px',
+                      WebkitAppRegion: 'drag',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      paddingRight: '8px',
+                      background: 'rgba(0,0,0,0.4)',
+                      cursor: 'move',
+                      zIndex: 1000
+                  }}>
+                      <button 
+                          onClick={toggleBorderlessMode}
+                          style={{ WebkitAppRegion: 'no-drag', cursor: 'pointer', color: '#fff', background: 'transparent', border: 'none', display: 'flex' }}
+                          title="退出无边框模式"
+                      >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                      </button>
+                  </div>
+                  
+                  <div style={{ flex: 1, overflow: 'hidden', padding: '0 8px' }} className={styles['no-scrollbar']}>
+                      {danmuList.slice().reverse().map(item => {
+                          if (!shouldShowItem(item)) return null
+                          
+                          // 渲染 Msg
+                          if (item.type === 'msg') {
+                              const msg = item.data
+                              const isGuard = msg.sender.medal_info && msg.sender.medal_info.guard_level > 0
+                              const unameColor = isGuard ? '#ff7f9e' : (msg.sender.is_vip || msg.sender.is_svip ? '#fb7299' : '#00a1d6')
+                              const bgColor = isGuard ? 'rgba(255, 234, 239, 0.8)' : 'transparent' // 增加透明度适配
+                              
+                              const isRead = readMessages.has(item.id)
+                              const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
+
+                              return (
+                                <div 
+                                    key={item.id} 
+                                    className={styles['danmu-item']}
+                                    style={{ backgroundColor: bgColor, display: 'flex', flexWrap: 'wrap', alignItems: 'center', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.8)', ...readStyle }} // 增加文字阴影
+                                >
+                                    {/* 头部容器 (勋章+舰长图标+用户名) */}
+                                    <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', marginRight: '4px' }}>
+                                        {/* 勋章 */}
+                                        {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
+                                            <span 
+                                              className={styles['medal-badge']}
+                                              style={{
+                                                borderColor: getMedalColor(msg.sender.medal_info.medal_level),
+                                                backgroundColor: getMedalColor(msg.sender.medal_info.medal_level),
+                                                backgroundImage: 'none'
+                                              }}
+                                            >
+                                                {msg.sender.medal_info.medal_name}|{msg.sender.medal_info.medal_level}
+                                            </span>
+                                        )}
+                                        
+                                        {/* 舰长图标 */}
+                                        {isGuard && (
+                                            <img 
+                                                src={getGuardIcon(msg.sender.medal_info.guard_level)}
+                                                className={styles['guard-icon']}
+                                                alt="guard"
+                                            />
+                                        )}
+                                        
+                                        {/* 发送者 */}
+                                        <span 
+                                            className={`${styles['uname']} ${isGuard ? styles['uname-guard'] : styles['uname-normal']}`}
+                                            onClick={(e) => handleUserClick(e, msg.sender)}
+                                            style={{ cursor: 'pointer', color: unameColor, fontWeight: 'bold' }}
+                                            data-user-action-trigger="true"
+                                        >
+                                            {msg.sender.uname}:
+                                        </span>
+                                    </div>
+                                    
+                                    {/* 内容 */}
+                                    <span style={{ wordBreak: 'break-word', lineHeight: '1.5' }}>
+                                        <Linkify>{msg.content}</Linkify>
+                                    </span>
+                                </div>
+                              )
+                          }
+                          
+                          // 渲染 SuperChat
+                          if (item.type === 'superchat') {
+                              const msg = item.data
+                              const levelColor = msg.price >= 2000 ? 'var(--sc-level-5)' :
+                                                 msg.price >= 1000 ? 'var(--sc-level-4)' :
+                                                 msg.price >= 500  ? 'var(--sc-level-3)' :
+                                                 msg.price >= 100  ? 'var(--sc-level-2)' :
+                                                 msg.price >= 50   ? 'var(--sc-level-1)' :
+                                                                     'var(--sc-level-0)'
+                              
+                              const isRead = readMessages.has(item.id)
+                              const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
+
+                              return (
+                                <div 
+                                    key={item.id} 
+                                    className={styles['sc-card']} 
+                                    style={{ borderColor: levelColor, ...readStyle }}
+                                    onDoubleClick={() => handleToggleRead(item.id)}
+                                >
+                                    <div 
+                                        className={styles['sc-header']} 
+                                        style={{ backgroundColor: levelColor }}
+                                    >
+                                        <img 
+                                            src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                                            alt="face" 
+                                            style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '6px', verticalAlign: 'middle', cursor: 'pointer' }} 
+                                            onClick={(e) => handleUserClick(e, msg.sender)}
+                                            data-user-action-trigger="true"
+                                        />
+                                        <span 
+                                            style={{fontWeight:'bold', cursor: 'pointer'}}
+                                            onClick={(e) => handleUserClick(e, msg.sender)}
+                                            data-user-action-trigger="true"
+                                        >
+                                            {msg.sender.uname}
+                                        </span>
+                                        <span style={{marginLeft: 'auto'}}>￥{msg.price}</span>
+                                    </div>
+                                    <div className={styles['sc-content']}>
+                                        {msg.message}
+                                    </div>
+                                </div>
+                              )
+                          }
+                          
+                          // 渲染 Gift
+                          if (item.type === 'gift') {
+                              const msg = item.data
+                              const isRead = readMessages.has(item.id)
+                              const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
+                              
+                              if (msg instanceof GuardMessage || msg.guard_level) {
+                                  const guardName = msg.guard_level === 1 ? '总督' : msg.guard_level === 2 ? '提督' : '舰长'
+                                  const priceRMB = msg.price / 1000 
+                                  
+                                  if (priceRMB <= minGiftPrice) return null
+                                  
+                                  const cardBg = msg.guard_level === 1 ? '#d32f2f' :
+                                                 msg.guard_level === 2 ? '#7b1fa2' :
+                                                                         '#1976d2'
+
+                                  return (
+                                      <div 
+                                        key={item.id} 
+                                        className={styles['gift-card-anim']}
+                                        style={{ 
+                                            backgroundColor: cardBg,
+                                            color: '#fff',
+                                            borderRadius: '8px',
+                                            padding: '10px 12px',
+                                            marginBottom: '8px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                                            fontWeight: 'bold',
+                                            border: 'none',
+                                            ...readStyle
+                                        }}
+                                        onDoubleClick={() => handleToggleRead(item.id)}
+                                      >
+                                          <div style={{ position: 'relative', marginRight: '12px', cursor: 'pointer' }} onClick={(e) => handleUserClick(e, msg.sender)} data-user-action-trigger="true">
+                                              <img src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} alt="face" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)' }} />
+                                              <img src={getGuardIcon(msg.guard_level)} style={{ position: 'absolute', bottom: '-4px', right: '-4px', width: '18px', height: '18px' }} alt="icon" />
+                                          </div>
+                                          <div style={{ flex: 1 }}>
+                                              <div style={{ fontSize: '15px', lineHeight: '1.2', cursor: 'pointer' }} onClick={(e) => handleUserClick(e, msg.sender)} data-user-action-trigger="true">{msg.sender.uname}</div>
+                                              <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '4px' }}>开通了 {guardName} x{msg.num}{msg.unit}</div>
+                                          </div>
+                                          <div style={{ fontSize: '16px', marginLeft: '8px' }}>￥{priceRMB}</div>
+                                      </div>
+                                  )
+                              }
+
+                              const config = giftMap[msg.gift_info.id]
+                              const price = config ? config.price : msg.gift_info.price
+                              const coinType = config ? config.coin_type : (msg.gift_info.price > 0 ? 'gold' : 'silver')
+                              
+                              let valueRMB = 0
+                              if (price > 0 && coinType === 'gold') {
+                                  valueRMB = (price * msg.num) / 1000
+                              }
+                              
+                              if (valueRMB <= minGiftPrice) return null
+                              
+                              const giftImg = config ? config.img : (msg.gift_info.webp || msg.gift_info.img_basic)
+
+                              if (valueRMB <= 29) {
+                                  return (
+                                      <div 
+                                        key={item.id} 
+                                        className={styles['danmu-item']} 
+                                        style={{ display: 'flex', alignItems: 'center', padding: '4px 8px', flexWrap: 'wrap', gap: '4px', backgroundColor: 'rgba(0,0,0,0.3)', color: '#fff', ...readStyle }}
+                                        onDoubleClick={() => handleToggleRead(item.id)}
+                                      >
+                                          <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                                              <img src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} alt="face" style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', cursor: 'pointer' }} onClick={(e) => handleUserClick(e, msg.sender)} data-user-action-trigger="true" />
+                                              <span style={{ color: '#fff', fontWeight: 'bold', marginRight: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={(e) => handleUserClick(e, msg.sender)} data-user-action-trigger="true">{msg.sender.uname}</span>
+                                          </div>
+                                          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
+                                              <span style={{ color: '#ccc', marginRight: '4px', whiteSpace: 'nowrap' }}>投喂</span>
+                                              {giftImg && <img src={giftImg} alt="gift" style={{ width: '24px', height: '24px', marginRight: '4px', objectFit: 'contain' }} />}
+                                              <span style={{ color: '#00a1d6', fontWeight: 'bold', marginRight: '4px', whiteSpace: 'nowrap' }}>{msg.gift_info.name} x{msg.num}</span>
+                                          </div>
+                                      </div>
+                                  )
+                              }
+
+                              return (
+                                  <div 
+                                    key={item.id} 
+                                    className={styles['gift-card-anim']}
+                                    style={{
+                                        backgroundColor: valueRMB > 99 ? '#E8A900' : '#f085a5',
+                                        color: '#fff',
+                                        borderRadius: '8px',
+                                        padding: '10px 12px',
+                                        marginBottom: '8px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                                        fontWeight: 'bold',
+                                        border: 'none',
+                                        ...readStyle
+                                    }}
+                                    onDoubleClick={() => handleToggleRead(item.id)}
+                                  >
+                                      <div style={{ position: 'relative', marginRight: '12px', cursor: 'pointer' }} onClick={(e) => handleUserClick(e, msg.sender)} data-user-action-trigger="true">
+                                          <img src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} alt="face" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)' }} />
+                                      </div>
+                                      <div style={{ flex: 1 }}>
+                                          <div style={{ fontSize: '15px', lineHeight: '1.2', cursor: 'pointer' }} onClick={(e) => handleUserClick(e, msg.sender)} data-user-action-trigger="true">{msg.sender.uname}</div>
+                                          <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '4px' }}>{msg.action} {msg.gift_info.name} x{msg.num}</div>
+                                      </div>
+                                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginLeft: '8px' }}>
+                                          {giftImg && <img src={giftImg} alt="gift" style={{ width: '32px', height: '32px', marginBottom: '2px', objectFit: 'contain' }} />}
+                                          <div style={{ fontSize: '14px' }}>￥{valueRMB.toFixed(1)}</div>
+                                      </div>
+                                  </div>
+                              )
+                          }
+                          
+                          return null
+                      })}
+                  </div>
+              </div>
+            </React.Fragment>
+          )
+      }
+
       return (
         <React.Fragment>
           <Head>
             <title>Danmaku Console - {roomId}</title>
             <meta name="referrer" content="no-referrer" />
           </Head>
+          <style global jsx>{`
+            body {
+              margin: 0;
+              padding: 0;
+              overflow: hidden;
+              font-family: "Microsoft YaHei", sans-serif;
+              background-color: transparent;
+            }
+          `}</style>
           <div 
             className={styles['console-container']}
             style={{
                 zoom: uiScale,
-                fontSize: `${fontSize}px`
+                fontSize: `${fontSize}px`,
+                height: 'calc(100vh - 8px)',
+                margin: '4px',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                border: '1px solid rgba(0,0,0,0.06)',
+                boxShadow: '0 0 6px 0 rgba(0,0,0,0.3)',
+                position: 'relative'
             }}
           >
+              <TitleBar 
+                  title={roomInfo ? roomInfo.title : `Luludanmaku - ${roomId}`} 
+                  onToggleBorderless={toggleBorderlessMode} 
+                  isBorderlessActive={isBorderless} 
+              />
               {/* 头部 */}
               <div className={styles['console-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', backgroundColor: '#fff', borderBottom: '1px solid #eee', fontFamily: '"Microsoft YaHei", sans-serif' }}>
                   <div className={styles['room-info']} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -1350,7 +1764,7 @@ export default function HomePage() {
                                 </div>
                               )
                           })}
-                          {danmuList.filter(item => item.type === 'superchat').length === 0 && (
+                          {scList.filter(item => item.type === 'superchat').length === 0 && (
                               <div style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: '40px', fontSize: '12px' }}>
                                   暂无醒目留言
                               </div>
@@ -1713,85 +2127,108 @@ export default function HomePage() {
       <Head>
         <title>选择直播间 - Luludanmaku</title>
       </Head>
-      <div className={roomSelectStyles.container}>
-        <div className={roomSelectStyles.card}>
-            <div className={roomSelectStyles.header}>
-                <div className={roomSelectStyles.welcome} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                    {userInfo?.face && (
-                        <img 
-                            src={userInfo.face} 
-                            alt="avatar" 
-                            style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} 
-                        />
-                    )}
-                    <div>
-                        欢迎回来, <span className={roomSelectStyles.username}>{userInfo?.uname || userInfo?.DedeUserID}</span>
-                    </div>
-                </div>
-                <h2 className={roomSelectStyles.title}>请输入直播间 ID</h2>
-            </div>
-            
-            <div className={roomSelectStyles.formGroup}>
-                <div className={roomSelectStyles.inputWrapper} ref={wrapperRef}>
-                    <input 
-                         type="number" 
-                         className={roomSelectStyles.input}
-                         placeholder="例如: 21013446" 
-                         value={roomId}
-                         onChange={e => setRoomId(e.target.value)}
-                         onKeyDown={e => {
-                             if (e.key === 'Enter') connectDanmu()
-                             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault()
-                         }}
-                         onFocus={() => setShowHistoryDropdown(true)}
-                     />
-                    {showHistoryDropdown && roomHistory.length > 0 && (
-                        <div className={roomSelectStyles.dropdown}>
-                            {roomHistory.map(histId => (
-                                <div 
-                                    key={histId} 
-                                    className={roomSelectStyles.dropdownItem}
-                                    onClick={() => {
-                                        setRoomId(histId)
-                                        setShowHistoryDropdown(false)
-                                    }}
-                                >
-                                    <span>{histId}</span>
-                                    <span 
-                                        className={roomSelectStyles.deleteBtn}
-                                        onClick={(e) => deleteHistory(e, histId)}
-                                        title="删除"
-                                    >
-                                        ×
-                                    </span>
-                                </div>
-                            ))}
+      <style global jsx>{`
+        body {
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          font-family: "Microsoft YaHei", sans-serif;
+          background-color: transparent;
+        }
+      `}</style>
+      <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          height: 'calc(100vh - 8px)', 
+          margin: '4px', 
+          background: '#f0f2f5',
+          borderRadius: '6px',
+          overflow: 'hidden',
+          border: '1px solid rgba(0,0,0,0.06)',
+          boxShadow: '0 0 6px 0 rgba(0,0,0,0.3)',
+          position: 'relative'
+      }}>
+        <TitleBar title="选择直播间" />
+        <div className={roomSelectStyles.container} style={{ flex: 1, overflow: 'auto' }}>
+            <div className={roomSelectStyles.card}>
+                <div className={roomSelectStyles.header}>
+                    <div className={roomSelectStyles.welcome} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                        {userInfo?.face && (
+                            <img 
+                                src={userInfo.face} 
+                                alt="avatar" 
+                                style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} 
+                            />
+                        )}
+                        <div>
+                            欢迎回来, <span className={roomSelectStyles.username}>{userInfo?.uname || userInfo?.DedeUserID}</span>
                         </div>
-                    )}
+                    </div>
+                    <h2 className={roomSelectStyles.title}>请输入直播间 ID</h2>
                 </div>
+                
+                <div className={roomSelectStyles.formGroup}>
+                    <div className={roomSelectStyles.inputWrapper} ref={wrapperRef}>
+                        <input 
+                             type="number" 
+                             className={roomSelectStyles.input}
+                             placeholder="例如: 21013446" 
+                             value={roomId}
+                             onChange={e => setRoomId(e.target.value)}
+                             onKeyDown={e => {
+                                 if (e.key === 'Enter') connectDanmu()
+                                 if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault()
+                             }}
+                             onFocus={() => setShowHistoryDropdown(true)}
+                         />
+                        {showHistoryDropdown && roomHistory.length > 0 && (
+                            <div className={roomSelectStyles.dropdown}>
+                                {roomHistory.map(histId => (
+                                    <div 
+                                        key={histId} 
+                                        className={roomSelectStyles.dropdownItem}
+                                        onClick={() => {
+                                            setRoomId(histId)
+                                            setShowHistoryDropdown(false)
+                                        }}
+                                    >
+                                        <span>{histId}</span>
+                                        <span 
+                                            className={roomSelectStyles.deleteBtn}
+                                            onClick={(e) => deleteHistory(e, histId)}
+                                            title="删除"
+                                        >
+                                            ×
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <button 
+                        className={roomSelectStyles.btnConnect}
+                        onClick={connectDanmu} 
+                        disabled={danmuStatus.startsWith('Connecting') || danmuStatus.startsWith('Fetching')}
+                    >
+                        {danmuStatus.startsWith('Connecting') || danmuStatus.startsWith('Fetching') ? '连接中...' : '连接'}
+                    </button>
+                </div>
+                
+                <p className={`${roomSelectStyles.status} ${danmuStatus.startsWith('Connection Failed') ? roomSelectStyles.statusError : ''}`}>
+                    {danmuStatus !== 'Disconnected' ? danmuStatus : ''}
+                </p>
+
                 <button 
-                    className={roomSelectStyles.btnConnect}
-                    onClick={connectDanmu} 
-                    disabled={danmuStatus.startsWith('Connecting') || danmuStatus.startsWith('Fetching')}
+                    className={roomSelectStyles.btnLogout}
+                    onClick={() => {
+                        setLoggedIn(false)
+                        setUserInfo(null)
+                        initLogin()
+                    }}
                 >
-                    {danmuStatus.startsWith('Connecting') || danmuStatus.startsWith('Fetching') ? '连接中...' : '连接'}
+                    退出登录
                 </button>
             </div>
-            
-            <p className={`${roomSelectStyles.status} ${danmuStatus.startsWith('Connection Failed') ? roomSelectStyles.statusError : ''}`}>
-                {danmuStatus !== 'Disconnected' ? danmuStatus : ''}
-            </p>
-
-            <button 
-                className={roomSelectStyles.btnLogout}
-                onClick={() => {
-                    setLoggedIn(false)
-                    setUserInfo(null)
-                    initLogin()
-                }}
-            >
-                退出登录
-            </button>
         </div>
       </div>
     </React.Fragment>

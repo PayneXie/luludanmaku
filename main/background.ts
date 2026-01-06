@@ -20,6 +20,9 @@ if (isProd) {
   const mainWindow = createWindow('main', {
     width: 1000,
     height: 600,
+    frame: false, // Frameless for custom UI and transparent mode
+    transparent: true, // Allow transparency
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -508,4 +511,30 @@ ipcMain.handle('bilibili-get-user-info', async (event, cookies: BiliCookies) => 
     console.error('Failed to get user info:', error)
     return { success: false, error: error.message || error }
   }
+})
+
+// Window Control IPC
+ipcMain.on('window-min', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    win?.minimize()
+})
+ipcMain.on('window-max', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win?.isMaximized()) {
+        win.unmaximize()
+    } else {
+        win?.maximize()
+    }
+})
+ipcMain.on('window-close', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    win?.close()
+})
+ipcMain.on('window-resize', (event, { width, height }) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    win?.setSize(width, height)
+})
+ipcMain.on('window-set-size', (event, { width, height, animate }) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    win?.setSize(width, height, animate)
 })
