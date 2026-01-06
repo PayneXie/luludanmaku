@@ -274,7 +274,8 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
               msg.cmd === 'ENTRY_EFFECT' || 
               msg.cmd === 'SEND_GIFT' || 
               msg.cmd === 'SUPER_CHAT_MESSAGE' || 
-              msg.cmd === 'ONLINE_RANK_COUNT') {
+              msg.cmd === 'ONLINE_RANK_COUNT' ||
+              msg.cmd === 'USER_TOAST_MSG') {
             
             messageBuffer.push(msg)
 
