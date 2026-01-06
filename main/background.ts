@@ -7,6 +7,8 @@ import { BiliWebSocket, WsInfo, PackResult } from './lib/bilibili_socket'
 
 const isProd = process.env.NODE_ENV === 'production'
 let activeBiliSocket: BiliWebSocket | null = null
+let messageBuffer: any[] = []
+let messageTimer: NodeJS.Timeout | null = null
 
 if (isProd) {
   serve({ directory: 'app' })
@@ -245,23 +247,37 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
     activeBiliSocket = null
   }
   
+  // Clear previous timer and buffer
+  if (messageTimer) {
+    clearInterval(messageTimer)
+    messageTimer = null
+  }
+  messageBuffer = []
+
   try {
+    // Setup flush timer (100ms)
+    messageTimer = setInterval(() => {
+      if (messageBuffer.length > 0) {
+        // Send batch
+        event.reply('danmu-message', messageBuffer)
+        messageBuffer = []
+      }
+    }, 100)
+
     activeBiliSocket = new BiliWebSocket(wsInfo, (packet: PackResult) => {
        // Filter for DANMU_MSG or other interest
        packet.body.forEach(msg => {
           // console.log('Forwarding MSG:', msg.cmd) // Debug
-          if (msg.cmd === 'DANMU_MSG') {
-            event.reply('danmu-message', msg)
-          } else if (msg.cmd === 'INTERACT_WORD' || msg.cmd === 'INTERACT_WORD_V2' || msg.cmd === 'ENTRY_EFFECT') {
-            // Someone entered or followed
-            event.reply('danmu-message', msg)
-          } else if (msg.cmd === 'SEND_GIFT') {
-            event.reply('danmu-message', msg)
-          } else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
-            event.reply('danmu-message', msg)
-          } else if (msg.cmd === 'ONLINE_RANK_COUNT') {
-             // High Energy / Online Count Update
-             event.reply('danmu-message', msg)
+          if (msg.cmd === 'DANMU_MSG' || 
+              msg.cmd === 'INTERACT_WORD' || 
+              msg.cmd === 'INTERACT_WORD_V2' || 
+              msg.cmd === 'ENTRY_EFFECT' || 
+              msg.cmd === 'SEND_GIFT' || 
+              msg.cmd === 'SUPER_CHAT_MESSAGE' || 
+              msg.cmd === 'ONLINE_RANK_COUNT') {
+            
+            messageBuffer.push(msg)
+
           } else if (msg.cmd === 'STOP_LIVE_ROOM_LIST') {
              // System message, ignore in production
              // console.log('Ignored system msg:', msg.cmd)
@@ -279,6 +295,11 @@ ipcMain.on('bilibili-disconnect-socket', () => {
     activeBiliSocket.Disconnect()
     activeBiliSocket = null
   }
+  if (messageTimer) {
+    clearInterval(messageTimer)
+    messageTimer = null
+  }
+  messageBuffer = []
 })
 
 // Debug IPC for custom messages

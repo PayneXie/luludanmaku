@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react'
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import Head from 'next/head'
 import QRCode from 'qrcode'
 import { getQrCode, checkQrCode, QrCodeStatus, getDanmuInfo, getGiftConfig } from '@/lib/bilibili'
 import { createDanmuEntry } from '@/lib/common/danmu-entry'
 import { DanmuMessage, GiftMessage, SuperChatMessage, GuardMessage } from '@/lib/types/danmaku'
+import { DanmuItem, ScItem, GiftItem } from '@/components/DanmuListItems'
 import { levelToIconURL } from '@/lib/utils'
 import moment from 'moment'
 import styles from '@/styles/console.module.css' // 引入 CSS 模块
@@ -82,7 +83,111 @@ export default function HomePage() {
   const [giftList, setGiftList] = useState([])   // 礼物 + 舰长 (保留所有)
   
   const danmuListRef = useRef(null)
-  
+  const renderBuffer = useRef([]) // 渲染缓冲区
+  const [maxDanmuLimit, setMaxDanmuLimit] = useState(1000) // 弹幕保留数量上限
+  const [receivedDanmuCount, setReceivedDanmuCount] = useState(0) // 总接收弹幕计数
+
+  // 定时处理渲染缓冲区 (200ms)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const msgs = renderBuffer.current
+      if (msgs.length === 0) return
+      
+      renderBuffer.current = [] // 清空缓冲区
+      
+      const newDanmu = []
+      const newSc = []
+      const newGift = []
+      let lastOnlineCount = null
+      
+      msgs.forEach(msg => {
+         // 处理高能榜更新
+         if (msg.cmd === 'ONLINE_RANK_COUNT') {
+             if (msg.data && typeof msg.data.count === 'number') {
+                 lastOnlineCount = msg.data.count
+             }
+             return
+         }
+         
+         let newItem = null;
+         let listType = 'danmu'; 
+         
+         if (msg.cmd === 'DANMU_MSG') {
+             try {
+                newItem = { id: Math.random(), type: 'msg', data: new DanmuMessage({ info: msg.info }) }
+                listType = 'danmu'
+             } catch(e) { console.error(e); return; }
+         } else if (msg.cmd === 'SEND_GIFT') {
+             try {
+                newItem = { id: Math.random(), type: 'gift', data: new GiftMessage(msg) }
+                listType = 'gift'
+             } catch(e) { console.error(e); return; }
+         } else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
+             try {
+                newItem = { id: Math.random(), type: 'superchat', data: new SuperChatMessage(msg) }
+                listType = 'sc'
+             } catch(e) { console.error(e); return; }
+         } else if (msg.cmd === 'USER_TOAST_MSG') {
+             try {
+                newItem = { id: Math.random(), type: 'gift', data: new GuardMessage(msg) }
+                listType = 'gift'
+             } catch(e) { console.error(e); return; }
+         } else if (msg.cmd === 'SYSTEM_MSG') {
+                newItem = { id: Math.random(), type: 'system', data: msg.msg }
+                listType = 'danmu'
+         }
+
+         if (!newItem) return;
+
+         if (listType === 'danmu') newDanmu.push(newItem)
+         else if (listType === 'sc') newSc.push(newItem)
+         else if (listType === 'gift') newGift.push(newItem)
+      })
+      
+      // 批量更新状态
+      if (lastOnlineCount !== null) {
+          const prevCount = prevOnlineCountRef.current
+          if (lastOnlineCount > prevCount) setOnlineTrend('up')
+          else if (lastOnlineCount < prevCount) setOnlineTrend('down')
+          
+          prevOnlineCountRef.current = lastOnlineCount
+          setOnlineCount(lastOnlineCount)
+      }
+      
+      if (newDanmu.length > 0) {
+          // 更新总计数
+          setReceivedDanmuCount(prev => prev + newDanmu.length)
+          
+          setDanmuList(prev => {
+              // 倒序插入，保持最新的在最前
+              const updated = [...newDanmu.reverse(), ...prev]
+              // 限制最大长度 (使用 state 中的配置)
+              if (updated.length > maxDanmuLimit) {
+                  return updated.slice(0, maxDanmuLimit)
+              }
+              return updated
+          })
+      }
+      
+      if (newSc.length > 0) {
+           setScList(prev => {
+               const updated = [...newSc.reverse(), ...prev]
+               return updated.slice(0, 500) // 限制 SC 列表长度
+           })
+      }
+      
+      if (newGift.length > 0) {
+           setGiftList(prev => {
+               const updated = [...newGift.reverse(), ...prev]
+               return updated // 不限制礼物列表长度
+           })
+      }
+      
+    }, 200) // 每秒 5 次刷新
+    
+    return () => clearInterval(timer)
+  }, [maxDanmuLimit]) // 依赖 maxDanmuLimit 以便更新 slice 逻辑
+
   // 房间信息（标题、状态等）
   const [roomInfo, setRoomInfo] = useState(null)
   const [onlineCount, setOnlineCount] = useState(0) // 高能值 (Online Rank Count)
@@ -200,6 +305,8 @@ export default function HomePage() {
   const danmuFilterRef = useRef(null)
   const giftSettingsRef = useRef(null)
   const scSettingsRef = useRef(null)
+  const settingsPanelRef = useRef(null) // 设置面板 Ref
+  const settingsBtnRef = useRef(null)   // 设置按钮 Ref
   const [showScSettings, setShowScSettings] = useState(false)
 
   useEffect(() => {
@@ -213,10 +320,18 @@ export default function HomePage() {
           if (showScSettings && scSettingsRef.current && !scSettingsRef.current.contains(event.target)) {
               setShowScSettings(false)
           }
+          // 点击外部关闭设置面板
+          if (showSettings && settingsPanelRef.current && !settingsPanelRef.current.contains(event.target)) {
+              // 如果点击的是设置按钮本身，不要在这里关闭（交给按钮的 onClick 处理）
+              if (settingsBtnRef.current && settingsBtnRef.current.contains(event.target)) {
+                  return
+              }
+              setShowSettings(false)
+          }
       }
       document.addEventListener('mousedown', handleClickOutsidePanels)
       return () => document.removeEventListener('mousedown', handleClickOutsidePanels)
-  }, [showDanmuFilter, showGiftSettings, showScSettings])
+  }, [showDanmuFilter, showGiftSettings, showScSettings, showSettings])
 
   // 用户操作菜单状态
   const [selectedUser, setSelectedUser] = useState(null) // { user: {uid, uname, face}, position: {x, y} }
@@ -227,7 +342,7 @@ export default function HomePage() {
   // 已读消息 (存储消息 ID)
   const [readMessages, setReadMessages] = useState(new Set())
 
-  const handleToggleRead = (id) => {
+  const handleToggleRead = useCallback((id) => {
       setReadMessages(prev => {
           const newSet = new Set(prev)
           if (newSet.has(id)) {
@@ -237,7 +352,7 @@ export default function HomePage() {
           }
           return newSet
       })
-  }
+  }, [])
 
   const handleMarkAllRead = (type) => {
       setReadMessages(prev => {
@@ -312,33 +427,37 @@ export default function HomePage() {
       setSelectedUser(null)
   }
 
-  const handleUserClick = (e, user) => {
+  const handleUserClick = useCallback((e, user) => {
       e.stopPropagation()
       
       // Toggle logic: If clicking the same user, close the menu
-      if (selectedUser && String(selectedUser.user.uid) === String(user.uid)) {
-          setSelectedUser(null)
-          return
-      }
-
-      // 获取点击元素的矩形位置，以实现精确对齐
+      // 注意：selectedUser 是外部依赖，但我们需要在这里获取最新值吗？
+      // 为了保持 handleUserClick 的引用稳定，我们最好不要依赖 selectedUser
+      // 或者使用 setState 的 callback 形式，但这只能用于设置。
+      // 这里为了简单，我们先不优化 toggle 逻辑的依赖，或者我们可以让 UserActionMenu 处理关闭。
+      // 实际上，我们不需要在这里做 toggle check，因为每次点击都是新的事件。
+      // 如果要绝对稳定，可以把 user 传给 setSelectedUser 的函数形式。
+      
       const rect = e.currentTarget.getBoundingClientRect()
       
       let x = rect.left
       let y = rect.bottom
       
-      // 边界检查
       if (x + 280 > window.innerWidth) {
           x = window.innerWidth - 290
       }
       
-      // 如果下方空间不足 (假设菜单高度约 300px)，则显示在上方
       if (y + 300 > window.innerHeight) {
           y = rect.top - 300
       }
       
-      setSelectedUser({ user, position: { x, y } })
-  }
+      setSelectedUser(prev => {
+          if (prev && String(prev.user.uid) === String(user.uid)) {
+              return null
+          }
+          return { user, position: { x, y } }
+      })
+  }, []) // 没有任何依赖，永远稳定
   
   const handleFilterUser = (user) => {
       setDanmuFilter({
@@ -355,8 +474,11 @@ export default function HomePage() {
   useEffect(() => {
       const savedScale = localStorage.getItem('uiScale')
       const savedFont = localStorage.getItem('fontSize')
+      const savedLimit = localStorage.getItem('maxDanmuLimit')
+      
       if (savedScale) setUiScale(parseFloat(savedScale))
       if (savedFont) setFontSize(parseInt(savedFont))
+      if (savedLimit) setMaxDanmuLimit(parseInt(savedLimit))
       
       const savedHistory = localStorage.getItem('roomHistory')
       if (savedHistory) {
@@ -390,11 +512,13 @@ export default function HomePage() {
   }
 
   // 保存设置
-  const saveSettings = (scale, font) => {
+  const saveSettings = (scale, font, limit) => {
       setUiScale(scale)
       setFontSize(font)
+      setMaxDanmuLimit(limit)
       localStorage.setItem('uiScale', scale.toString())
       localStorage.setItem('fontSize', font.toString())
+      localStorage.setItem('maxDanmuLimit', limit.toString())
   }
   
   // 列宽（百分比）
@@ -404,17 +528,10 @@ export default function HomePage() {
 
   // 统计信息
   const stats = useMemo(() => {
-      let danmuCount = 0
+      // let danmuCount = 0 // Removed, use receivedDanmuCount instead
       let scTotal = 0
       let giftTotal = 0
       
-      // 统计弹幕数
-      danmuList.forEach(item => {
-          if (item.type === 'msg') {
-              danmuCount++
-          }
-      })
-
       // 统计 SC
       scList.forEach(item => {
           if (item.type === 'superchat') {
@@ -444,11 +561,11 @@ export default function HomePage() {
       })
       
       return { 
-          danmuCount, 
+          danmuCount: receivedDanmuCount, 
           scTotal: scTotal, 
           giftTotal: giftTotal
       }
-  }, [danmuList, scList, giftList, giftMap])
+  }, [receivedDanmuCount, scList, giftList, giftMap])
 
   const pollTimer = useRef(null)
 
@@ -528,10 +645,10 @@ export default function HomePage() {
               type: 'system',
               data: text
           }
-          const updated = [...prev, newItem]
+          const updated = [newItem, ...prev]
           // 限制最大长度 1000
           if (updated.length > 1000) {
-              return updated.slice(updated.length - 1000)
+              return updated.slice(0, 1000)
           }
           return updated
       })
@@ -545,6 +662,7 @@ export default function HomePage() {
     setDanmuList([])
     setScList([])
     setGiftList([])
+    setReceivedDanmuCount(0) // 重置计数
     setOnlineCount(0)
     
     addSystemMessage(`直播间已连接：${roomId}`)
@@ -587,71 +705,10 @@ export default function HomePage() {
       
       // 设置监听器
       // 使用 ref 来保存监听器，以便稍后移除
-      const msgHandler = (event, msg) => {
-         // Handle High Energy Update
-         if (msg.cmd === 'ONLINE_RANK_COUNT') {
-             if (msg.data && typeof msg.data.count === 'number') {
-                 const newCount = msg.data.count
-                 const prevCount = prevOnlineCountRef.current
-                 
-                 if (newCount > prevCount) {
-                     setOnlineTrend('up')
-                 } else if (newCount < prevCount) {
-                     setOnlineTrend('down')
-                 }
-                 
-                 prevOnlineCountRef.current = newCount
-                 setOnlineCount(newCount)
-             }
-             return
-         }
-
-         // 根据消息类型分发到不同的列表
-         let newItem = null;
-         let listType = 'danmu'; // 'danmu' | 'sc' | 'gift'
-         
-         if (msg.cmd === 'DANMU_MSG') {
-             try {
-                newItem = { id: Math.random(), type: 'msg', data: new DanmuMessage({ info: msg.info }) }
-                listType = 'danmu'
-             } catch(e) { console.error(e); return; }
-         } else if (msg.cmd === 'SEND_GIFT') {
-             try {
-                newItem = { id: Math.random(), type: 'gift', data: new GiftMessage(msg) }
-                listType = 'gift'
-             } catch(e) { console.error(e); return; }
-         } else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
-             try {
-                newItem = { id: Math.random(), type: 'superchat', data: new SuperChatMessage(msg) }
-                listType = 'sc'
-             } catch(e) { console.error(e); return; }
-         } else if (msg.cmd === 'USER_TOAST_MSG') {
-             try {
-                newItem = { id: Math.random(), type: 'gift', data: new GuardMessage(msg) }
-                listType = 'gift'
-             } catch(e) { console.error(e); return; }
-         } else if (msg.cmd === 'SYSTEM_MSG') {
-                newItem = { id: Math.random(), type: 'system', data: msg.msg }
-                listType = 'danmu'
-         }
-
-         if (!newItem) return;
-         
-         // 分发更新
-         if (listType === 'danmu') {
-             setDanmuList(prev => {
-                 const updated = [...prev, newItem]
-                 // 限制最大长度 1000
-                 if (updated.length > 1000) {
-                     return updated.slice(updated.length - 1000)
-                 }
-                 return updated
-             })
-         } else if (listType === 'sc') {
-             setScList(prev => [...prev, newItem])
-         } else if (listType === 'gift') {
-             setGiftList(prev => [...prev, newItem])
-         }
+      const msgHandler = (event, payload) => {
+         const messages = Array.isArray(payload) ? payload : [payload]
+         // 将消息推入缓冲区，由 useEffect 定时批量处理
+         renderBuffer.current.push(...messages)
       }
       
       // 移除旧监听器以避免重复
@@ -759,22 +816,13 @@ export default function HomePage() {
   }
 
   // 自动滚动/置顶逻辑
-  // 最新的在顶部。
-  // 除非向下滚动，否则保持在顶部。
   useEffect(() => {
+    // 现在的列表顺序是 [New, Old...]
+    // 只要 scrollTop 在 0，用户就能看到最新的。
+    // 如果用户没有滚动（或者距离顶部很近），我们强制保持在顶部。
     if (danmuListRef.current) {
-        // 因为反转了列表（flex-direction column，但映射反转），
-        // scrollTop 0 实际上是顶部（最新的）。
-        // 如果用户向下滚动 (scrollTop > 0)，我们停止自动滚动到顶部。
-        
-        // 等等，“最新的在顶部”的标准行为：
-        // 1. 渲染列表为 [新, 旧, 更旧...]
-        // 2. 容器 scrollTop = 0 意味着在最新的位置。
-        // 3. 如果用户向下滚动 (scrollTop > 阈值)，不会强制将其返回到 0。
-        // 4. 如果 scrollTop 接近 0，将其保持在 0。
-        
         const { scrollTop } = danmuListRef.current
-        if (scrollTop < 50) { // 阈值
+        if (scrollTop < 50) { 
             danmuListRef.current.scrollTop = 0
         }
     }
@@ -838,12 +886,7 @@ export default function HomePage() {
   }
 
   // 安全获取图标 URL 的辅助函数
-  const getGuardIcon = (level) => {
-    if (level === 1) return level1.src || level1
-    if (level === 2) return level2.src || level2
-    if (level === 3) return level3.src || level3
-    return ''
-  }
+  // (移至 DanmuListItems.jsx)
 
   // 已连接视图
   if (danmuStatus.startsWith('Connected')) {
@@ -1297,7 +1340,7 @@ export default function HomePage() {
                       </button>
 
                       {/* 设置按钮（齿轮图标） */}
-                      <div style={{ position: 'relative' }}>
+                      <div style={{ position: 'relative' }} ref={settingsBtnRef}>
                           <button 
                             title="界面设置"
                             style={{ 
@@ -1322,9 +1365,11 @@ export default function HomePage() {
                           
                           {/* 设置模态框（Portal） */}
                           {showSettings && typeof document !== 'undefined' && createPortal(
-                              <div style={{
+                              <div 
+                                ref={settingsPanelRef}
+                                style={{
                                   position: 'fixed',
-                                  top: '60px',
+                                  top: '105px', // 调整位置，避免遮挡按钮 (Header height approx 100px)
                                   right: '20px',
                                   width: '260px',
                                   background: '#fff',
@@ -1348,7 +1393,7 @@ export default function HomePage() {
                                               max="2.0" 
                                               step="0.1" 
                                               value={uiScale}
-                                              onChange={(e) => saveSettings(parseFloat(e.target.value), fontSize)}
+                                              onChange={(e) => saveSettings(parseFloat(e.target.value), fontSize, maxDanmuLimit)}
                                               style={{ flex: 1 }}
                                           />
                                           <span style={{ fontSize: '12px' }}>200%</span>
@@ -1365,16 +1410,33 @@ export default function HomePage() {
                                               max="24" 
                                               step="1" 
                                               value={fontSize}
-                                              onChange={(e) => saveSettings(uiScale, parseInt(e.target.value))}
+                                              onChange={(e) => saveSettings(uiScale, parseInt(e.target.value), maxDanmuLimit)}
                                               style={{ flex: 1 }}
                                           />
                                           <span style={{ fontSize: '12px' }}>24</span>
                                       </div>
                                   </div>
+
+                                  <div>
+                                      <div style={{ marginBottom: 8, fontWeight: 'bold', fontSize: '14px', marginTop: 16 }}>保留弹幕数 ({maxDanmuLimit})</div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                          <span style={{ fontSize: '12px' }}>100</span>
+                                          <input 
+                                              type="range" 
+                                              min="100" 
+                                              max="5000" 
+                                              step="100" 
+                                              value={maxDanmuLimit}
+                                              onChange={(e) => saveSettings(uiScale, fontSize, parseInt(e.target.value))}
+                                              style={{ flex: 1 }}
+                                          />
+                                          <span style={{ fontSize: '12px' }}>5000</span>
+                                      </div>
+                                  </div>
                                   
                                   <div style={{ marginTop: '16px', textAlign: 'right' }}>
                                       <button 
-                                        onClick={() => saveSettings(1.0, 14)}
+                                        onClick={() => saveSettings(1.0, 14, 1000)}
                                         style={{ fontSize: '12px', color: '#00a1d6', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
                                       >
                                           恢复默认
@@ -1526,98 +1588,23 @@ export default function HomePage() {
                       <div 
                         ref={danmuListRef}
                         className={styles['col-content']}
-                        style={{ flex: 1, overflowY: 'auto' }} // 确保可滚动
+                        style={{ flex: 1, overflowY: 'auto' }}
                       >
-                          {danmuList.filter(item => {
-                              // Basic Type Filter
-                              if (item.type !== 'msg' && item.type !== 'system') return false
+                          {danmuList.map(item => { // 直接 map
+                              // Filter logic moved here to avoid creating intermediate arrays
+                              if (item.type !== 'msg' && item.type !== 'system') return null
+                              if (!shouldShowItem(item)) return null
                               
-                              return shouldShowItem(item)
-                          }).slice().reverse().map(item => {
-                              if (item.type === 'msg') {
-                                  const msg = item.data
-                                  const guardLevel = msg.sender.medal_info ? msg.sender.medal_info.guard_level : 0
-                                  const isGuard = guardLevel > 0
-                                  
-                                  // 会员背景色
-                                  // 舰长(3): 淡蓝色 (保持一致)
-                                  // 提督(2): 淡紫色
-                                  // 总督(1): 淡金色
-                                  // 重点关注: 淡红色 (覆盖其他背景)
-                                  
-                                  const isHighlighted = highlightedUsers.has(String(msg.sender.uid))
-                                  
-                                  let bgColor = 'transparent'
-                                  if (guardLevel === 3) bgColor = 'rgba(0, 176, 255, 0.15)'   // 舰长 (Light Blue)
-                                  if (guardLevel === 2) bgColor = 'rgba(224, 64, 251, 0.2)'   // 提督 (Purple)
-                                  if (guardLevel === 1) bgColor = 'rgba(255, 215, 0, 0.25)'   // 总督 (Gold)
-                                  
-                                  if (isHighlighted) {
-                                      bgColor = 'rgba(255, 50, 50, 0.2)' // Red for highlighted
-                                  }
-
-                                  // 用户名颜色区分
-                                  let unameColor = '#333' // 普通用户黑色
-                                  if (guardLevel === 3) unameColor = '#00a1d6' // 舰长 (蓝色)
-                                  if (guardLevel === 2) unameColor = '#E040FB' // 提督 (紫色)
-                                  if (guardLevel === 1) unameColor = '#FF3232' // 总督 (红色)
-
-                                  return (
-                                    <div 
-                                        key={item.id} 
-                                        className={styles['danmu-item']}
-                                        style={{ backgroundColor: bgColor, display: 'flex', flexWrap: 'wrap', alignItems: 'center' }}
-                                    >
-                                        {/* 头部容器 (勋章+舰长图标+用户名) 整体不换行 */}
-                                        <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', marginRight: '4px' }}>
-                                            {/* 勋章 */}
-                                            {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
-                                                <span 
-                                                  className={styles['medal-badge']}
-                                                  style={{
-                                                    borderColor: getMedalColor(msg.sender.medal_info.medal_level),
-                                                    backgroundColor: getMedalColor(msg.sender.medal_info.medal_level),
-                                                    backgroundImage: 'none'
-                                                  }}
-                                                >
-                                                    {msg.sender.medal_info.medal_name}|{msg.sender.medal_info.medal_level}
-                                                </span>
-                                            )}
-                                            
-                                            {/* 舰长图标 */}
-                                            {isGuard && (
-                                                <img 
-                                                    src={getGuardIcon(msg.sender.medal_info.guard_level)}
-                                                    className={styles['guard-icon']}
-                                                    alt="guard"
-                                                />
-                                            )}
-                                            
-                                            {/* 发送者 */}
-                                            <span 
-                                                className={`${styles['uname']} ${isGuard ? styles['uname-guard'] : styles['uname-normal']}`}
-                                                onClick={(e) => handleUserClick(e, msg.sender)}
-                                                style={{ cursor: 'pointer', color: unameColor, fontWeight: 'bold' }}
-                                                data-user-action-trigger="true"
-                                            >
-                                                {msg.sender.uname}:
-                                            </span>
-                                        </div>
-                                        
-                                        {/* 内容 (允许换行) */}
-                                        <span style={{ wordBreak: 'break-word', lineHeight: '1.5' }}>
-                                            <Linkify>{msg.content}</Linkify>
-                                        </span>
-                                    </div>
-                                  )
-                              } else if (item.type === 'system') {
-                                  return (
-                                      <div key={item.id} className={styles['danmu-system']}>
-                                          {item.data}
-                                      </div>
-                                  )
-                              }
-                              return null
+                              return (
+                                  <DanmuItem 
+                                    key={item.id} 
+                                    item={item} 
+                                    highlightedUsers={highlightedUsers}
+                                    readMessages={readMessages}
+                                    onUserClick={handleUserClick}
+                                    onToggleRead={handleToggleRead}
+                                  />
+                              )
                           })}
                       </div>
                   </div>
@@ -1690,7 +1677,7 @@ export default function HomePage() {
                           </div>
                       </div>
                       <div className={styles['col-content']}>
-                          {danmuList.filter(item => item.type === 'superchat' && shouldShowItem(item)).reverse().map(item => {
+                          {scList.filter(item => item.type === 'superchat' && shouldShowItem(item)).map(item => {
                               const msg = item.data
                               // Bilibili SC 颜色等级
                               // < 50: Dark Blue (Level 0)

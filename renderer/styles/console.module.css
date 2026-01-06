@@ -132,6 +132,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 10px;
+  overflow-anchor: none; /* 防止浏览器自动滚动锚定，确保新消息始终在顶部 */
 }
 
 /* Danmu List (Left) */
