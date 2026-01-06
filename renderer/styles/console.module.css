@@ -47,7 +47,7 @@
   flex-direction: column;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 .console-header {
@@ -147,7 +147,8 @@
   line-height: 1.5;
   font-size: 1.15em; /* Relative to container font-size */
   word-break: break-all;
-  animation: fadeIn 0.2s ease-out;
+  animation: fadeIn 0.3s ease-out;
+  will-change: transform, opacity;
 }
 
 .danmu-interact {
@@ -268,6 +269,12 @@
   animation: slideInRight 0.3s ease-out;
 }
 
+.gift-card-anim {
+  animation: slideInRight 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
 .gift-card::before {
   content: '';
   position: absolute;
@@ -309,6 +316,6 @@
 }
 
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(10px); }
+  from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
 }

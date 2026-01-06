@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import Head from 'next/head'
 import QRCode from 'qrcode'
@@ -130,6 +130,8 @@ export default function HomePage() {
   // 筛选器 Refs (用于点击外部收起)
   const danmuFilterRef = useRef(null)
   const giftSettingsRef = useRef(null)
+  const scSettingsRef = useRef(null)
+  const [showScSettings, setShowScSettings] = useState(false)
 
   useEffect(() => {
       const handleClickOutsidePanels = (event) => {
@@ -139,10 +141,13 @@ export default function HomePage() {
           if (showGiftSettings && giftSettingsRef.current && !giftSettingsRef.current.contains(event.target)) {
               setShowGiftSettings(false)
           }
+          if (showScSettings && scSettingsRef.current && !scSettingsRef.current.contains(event.target)) {
+              setShowScSettings(false)
+          }
       }
       document.addEventListener('mousedown', handleClickOutsidePanels)
       return () => document.removeEventListener('mousedown', handleClickOutsidePanels)
-  }, [showDanmuFilter, showGiftSettings])
+  }, [showDanmuFilter, showGiftSettings, showScSettings])
 
   // 用户操作菜单状态
   const [selectedUser, setSelectedUser] = useState(null) // { user: {uid, uname, face}, position: {x, y} }
@@ -150,6 +155,51 @@ export default function HomePage() {
   // 重点关注用户 (存储 UID 字符串)
   const [highlightedUsers, setHighlightedUsers] = useState(new Set())
   
+  // 已读消息 (存储消息 ID)
+  const [readMessages, setReadMessages] = useState(new Set())
+
+  const handleToggleRead = (id) => {
+      setReadMessages(prev => {
+          const newSet = new Set(prev)
+          if (newSet.has(id)) {
+              newSet.delete(id)
+          } else {
+              newSet.add(id)
+          }
+          return newSet
+      })
+  }
+
+  const handleMarkAllRead = (type) => {
+      setReadMessages(prev => {
+          const newSet = new Set(prev)
+          danmuList.forEach(item => {
+              if (
+                  (type === 'superchat' && item.type === 'superchat') || 
+                  (type === 'gift' && item.type === 'gift')
+              ) {
+                  newSet.add(item.id)
+              }
+          })
+          return newSet
+      })
+  }
+
+  const handleMarkAllUnread = (type) => {
+      setReadMessages(prev => {
+          const newSet = new Set(prev)
+          danmuList.forEach(item => {
+              if (
+                  (type === 'superchat' && item.type === 'superchat') || 
+                  (type === 'gift' && item.type === 'gift')
+              ) {
+                  newSet.delete(item.id)
+              }
+          })
+          return newSet
+      })
+  }
+
   const handleHighlightUser = (user) => {
       setHighlightedUsers(prev => {
           const newSet = new Set(prev)
@@ -285,6 +335,43 @@ export default function HomePage() {
   const [colWidths, setColWidths] = useState([33.33, 33.33, 33.33])
   const containerRef = useRef(null)
 
+  // 统计信息
+  const stats = useMemo(() => {
+      let danmuCount = 0
+      let scTotal = 0
+      let giftTotal = 0
+      
+      danmuList.forEach(item => {
+          if (item.type === 'msg') {
+              danmuCount++
+          } else if (item.type === 'superchat') {
+              scTotal += item.data.price
+          } else if (item.type === 'gift') {
+              const msg = item.data
+              // 处理舰长
+              if (msg instanceof GuardMessage || msg.guard_level) {
+                  giftTotal += (msg.price / 1000)
+              } else {
+                  // 处理普通礼物
+                  const config = giftMap[msg.gift_info.id]
+                  // 优先使用配置中的价格，否则使用消息中的价格
+                  const price = config ? config.price : msg.gift_info.price
+                  const coinType = config ? config.coin_type : (msg.gift_info.price > 0 ? 'gold' : 'silver')
+                  
+                  if (price > 0 && coinType === 'gold') {
+                      giftTotal += (price * msg.num) / 1000
+                  }
+              }
+          }
+      })
+      
+      return { 
+          danmuCount, 
+          scTotal: scTotal, 
+          giftTotal: giftTotal
+      }
+  }, [danmuList, giftMap])
+
   const pollTimer = useRef(null)
 
   // 拖拽处理
@@ -391,7 +478,8 @@ export default function HomePage() {
                   map[g.id] = {
                       name: g.name,
                       price: g.price,
-                      coin_type: g.coin_type // 'gold' 或 'silver'
+                      coin_type: g.coin_type, // 'gold' 或 'silver'
+                      img: g.webp || g.img_basic || g.gif // 优先使用 webp
                   }
               })
           }
@@ -888,7 +976,7 @@ export default function HomePage() {
                     style={{ width: `${colWidths[0]}%` }}
                   >
                       <div className={styles['col-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
-                          <span>弹幕列表</span>
+                          <span>弹幕列表 ({stats.danmuCount})</span>
                           
                           <div style={{ position: 'relative' }} ref={danmuFilterRef}>
                               {/* 筛选按钮 */}
@@ -898,7 +986,15 @@ export default function HomePage() {
                                 title="弹幕筛选"
                               >
                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                     <line x1="4" y1="21" x2="4" y2="14"></line>
+                                     <line x1="4" y1="10" x2="4" y2="3"></line>
+                                     <line x1="12" y1="21" x2="12" y2="12"></line>
+                                     <line x1="12" y1="8" x2="12" y2="3"></line>
+                                     <line x1="20" y1="21" x2="20" y2="16"></line>
+                                     <line x1="20" y1="12" x2="20" y2="3"></line>
+                                     <line x1="1" y1="14" x2="7" y2="14"></line>
+                                     <line x1="9" y1="8" x2="15" y2="8"></line>
+                                     <line x1="17" y1="16" x2="23" y2="16"></line>
                                  </svg>
                               </div>
 
@@ -1012,47 +1108,58 @@ export default function HomePage() {
                                       bgColor = 'rgba(255, 50, 50, 0.2)' // Red for highlighted
                                   }
 
+                                  // 用户名颜色区分
+                                  let unameColor = '#333' // 普通用户黑色
+                                  if (guardLevel === 3) unameColor = '#00a1d6' // 舰长 (蓝色)
+                                  if (guardLevel === 2) unameColor = '#E040FB' // 提督 (紫色)
+                                  if (guardLevel === 1) unameColor = '#FF3232' // 总督 (红色)
+
                                   return (
                                     <div 
                                         key={item.id} 
                                         className={styles['danmu-item']}
-                                        style={{ backgroundColor: bgColor }}
+                                        style={{ backgroundColor: bgColor, display: 'flex', flexWrap: 'wrap', alignItems: 'center' }}
                                     >
-                                        {/* 勋章 */}
-                                        {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
+                                        {/* 头部容器 (勋章+舰长图标+用户名) 整体不换行 */}
+                                        <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', marginRight: '4px' }}>
+                                            {/* 勋章 */}
+                                            {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
+                                                <span 
+                                                  className={styles['medal-badge']}
+                                                  style={{
+                                                    borderColor: getMedalColor(msg.sender.medal_info.medal_level),
+                                                    backgroundColor: getMedalColor(msg.sender.medal_info.medal_level),
+                                                    backgroundImage: 'none'
+                                                  }}
+                                                >
+                                                    {msg.sender.medal_info.medal_name}|{msg.sender.medal_info.medal_level}
+                                                </span>
+                                            )}
+                                            
+                                            {/* 舰长图标 */}
+                                            {isGuard && (
+                                                <img 
+                                                    src={getGuardIcon(msg.sender.medal_info.guard_level)}
+                                                    className={styles['guard-icon']}
+                                                    alt="guard"
+                                                />
+                                            )}
+                                            
+                                            {/* 发送者 */}
                                             <span 
-                                              className={styles['medal-badge']}
-                                              style={{
-                                                borderColor: getMedalColor(msg.sender.medal_info.medal_level),
-                                                backgroundColor: getMedalColor(msg.sender.medal_info.medal_level),
-                                                backgroundImage: 'none'
-                                              }}
+                                                className={`${styles['uname']} ${isGuard ? styles['uname-guard'] : styles['uname-normal']}`}
+                                                onClick={(e) => handleUserClick(e, msg.sender)}
+                                                style={{ cursor: 'pointer', color: unameColor, fontWeight: 'bold' }}
+                                                data-user-action-trigger="true"
                                             >
-                                                {msg.sender.medal_info.medal_name}|{msg.sender.medal_info.medal_level}
+                                                {msg.sender.uname}:
                                             </span>
-                                        )}
+                                        </div>
                                         
-                                        {/* 舰长图标 */}
-                                        {isGuard && (
-                                            <img 
-                                                src={getGuardIcon(msg.sender.medal_info.guard_level)}
-                                                className={styles['guard-icon']}
-                                                alt="guard"
-                                            />
-                                        )}
-                                        
-                                        {/* 发送者 */}
-                                        <span 
-                                            className={`${styles['uname']} ${isGuard ? styles['uname-guard'] : styles['uname-normal']}`}
-                                            onClick={(e) => handleUserClick(e, msg.sender)}
-                                            style={{ cursor: 'pointer' }}
-                                            data-user-action-trigger="true"
-                                        >
-                                            {msg.sender.uname}:
+                                        {/* 内容 (允许换行) */}
+                                        <span style={{ wordBreak: 'break-word', lineHeight: '1.5' }}>
+                                            <Linkify>{msg.content}</Linkify>
                                         </span>
-                                        
-                                        {/* 内容 */}
-                                        <span><Linkify>{msg.content}</Linkify></span>
                                     </div>
                                   )
                               } else if (item.type === 'system') {
@@ -1078,7 +1185,62 @@ export default function HomePage() {
                     className={`${styles['column']} ${styles['col-sc']}`}
                     style={{ width: `${colWidths[1]}%` }}
                   >
-                      <div className={styles['col-header']} style={{ color: 'var(--sc-level-4)' }}>醒目留言</div>
+                      <div className={styles['col-header']} style={{ color: '#333', display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
+                          <span>醒目留言 (￥{stats.scTotal.toFixed(1)})</span>
+                          
+                          <div style={{ position: 'relative' }} ref={scSettingsRef}>
+                              <div 
+                                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                onClick={() => setShowScSettings(!showScSettings)}
+                                title="留言管理"
+                              >
+                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                     <line x1="4" y1="21" x2="4" y2="14"></line>
+                                     <line x1="4" y1="10" x2="4" y2="3"></line>
+                                     <line x1="12" y1="21" x2="12" y2="12"></line>
+                                     <line x1="12" y1="8" x2="12" y2="3"></line>
+                                     <line x1="20" y1="21" x2="20" y2="16"></line>
+                                     <line x1="20" y1="12" x2="20" y2="3"></line>
+                                     <line x1="1" y1="14" x2="7" y2="14"></line>
+                                     <line x1="9" y1="8" x2="15" y2="8"></line>
+                                     <line x1="17" y1="16" x2="23" y2="16"></line>
+                                 </svg>
+                              </div>
+
+                              {showScSettings && (
+                                  <div style={{
+                                      position: 'absolute',
+                                      top: '30px',
+                                      right: '-5px',
+                                      width: '140px',
+                                      background: '#fff',
+                                      border: '1px solid #ddd',
+                                      borderRadius: '6px',
+                                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                      padding: '8px',
+                                      zIndex: 1000,
+                                      color: '#333',
+                                      fontSize: '14px',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: '8px'
+                                  }}>
+                                      <button 
+                                          onClick={() => { handleMarkAllRead('superchat'); setShowScSettings(false) }}
+                                          style={{ padding: '8px', cursor: 'pointer', border: 'none', background: '#f1f3f5', borderRadius: '4px', color: '#495057', fontWeight: '500' }}
+                                      >
+                                          全部已读
+                                      </button>
+                                      <button 
+                                          onClick={() => { handleMarkAllUnread('superchat'); setShowScSettings(false) }}
+                                          style={{ padding: '8px', cursor: 'pointer', border: 'none', background: '#f1f3f5', borderRadius: '4px', color: '#495057', fontWeight: '500' }}
+                                      >
+                                          全部未读
+                                      </button>
+                                  </div>
+                              )}
+                          </div>
+                      </div>
                       <div className={styles['col-content']}>
                           {danmuList.filter(item => item.type === 'superchat' && shouldShowItem(item)).reverse().map(item => {
                               const msg = item.data
@@ -1095,19 +1257,28 @@ export default function HomePage() {
                                                  msg.price >= 100  ? 'var(--sc-level-2)' :
                                                  msg.price >= 50   ? 'var(--sc-level-1)' :
                                                                      'var(--sc-level-0)'
+                              
+                              const isRead = readMessages.has(item.id)
+                              const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
+
                               return (
-                                <div key={item.id} className={styles['sc-card']} style={{ borderColor: levelColor }}>
+                                <div 
+                                    key={item.id} 
+                                    className={styles['sc-card']} 
+                                    style={{ borderColor: levelColor, ...readStyle }}
+                                    onDoubleClick={() => handleToggleRead(item.id)}
+                                >
                                     <div 
                                         className={styles['sc-header']} 
-                                        style={{ backgroundColor: levelColor, cursor: 'pointer' }}
-                                        onClick={(e) => handleUserClick(e, msg.sender)}
-                                        data-user-action-trigger="true"
+                                        style={{ backgroundColor: levelColor }}
                                     >
                                         {/* SC 用户头像 */}
                                         <img 
                                             src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
                                             alt="face" 
-                                            style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '6px', verticalAlign: 'middle' }} 
+                                            style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '6px', verticalAlign: 'middle', cursor: 'pointer' }} 
+                                            onClick={(e) => handleUserClick(e, msg.sender)}
+                                            data-user-action-trigger="true"
                                         />
                                         
                                         {/* SC 勋章（类似于弹幕） */}
@@ -1130,7 +1301,13 @@ export default function HomePage() {
                                             </span>
                                         )}
 
-                                        <span style={{fontWeight:'bold'}}>{msg.sender.uname}</span>
+                                        <span 
+                                            style={{fontWeight:'bold', cursor: 'pointer'}}
+                                            onClick={(e) => handleUserClick(e, msg.sender)}
+                                            data-user-action-trigger="true"
+                                        >
+                                            {msg.sender.uname}
+                                        </span>
                                         <span style={{marginLeft: 'auto'}}>￥{msg.price}</span>
                                     </div>
                                     <div className={styles['sc-body']}>
@@ -1158,8 +1335,8 @@ export default function HomePage() {
                     className={`${styles['column']} ${styles['col-gift']}`}
                     style={{ width: `${colWidths[2]}%` }}
                   >
-                      <div className={styles['col-header']} style={{ color: 'var(--accent-yellow)', display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
-                          <span>礼物列表</span>
+                      <div className={styles['col-header']} style={{ color: '#333', display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
+                          <span>礼物列表 (￥{stats.giftTotal.toFixed(1)})</span>
                           
                           <div style={{ position: 'relative' }} ref={giftSettingsRef}>
                               {/* 设置图标 (SVG) -> 改为 Filter 图标 */}
@@ -1169,7 +1346,15 @@ export default function HomePage() {
                                 title="礼物筛选"
                               >
                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                     <line x1="4" y1="21" x2="4" y2="14"></line>
+                                     <line x1="4" y1="10" x2="4" y2="3"></line>
+                                     <line x1="12" y1="21" x2="12" y2="12"></line>
+                                     <line x1="12" y1="8" x2="12" y2="3"></line>
+                                     <line x1="20" y1="21" x2="20" y2="16"></line>
+                                     <line x1="20" y1="12" x2="20" y2="3"></line>
+                                     <line x1="1" y1="14" x2="7" y2="14"></line>
+                                     <line x1="9" y1="8" x2="15" y2="8"></line>
+                                     <line x1="17" y1="16" x2="23" y2="16"></line>
                                  </svg>
                               </div>
 
@@ -1211,7 +1396,21 @@ export default function HomePage() {
                                       />
                                   </div>
                                   <div style={{ fontSize: '12px', color: '#888', marginTop: 8 }}>
-                                      低于 ￥{minGiftPrice} 的礼物将被隐藏。
+                                      低于或等于 ￥{minGiftPrice} 的礼物将被隐藏。
+                                  </div>
+                                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                      <button 
+                                          onClick={() => { handleMarkAllRead('gift'); setShowGiftSettings(false) }}
+                                          style={{ padding: '8px', cursor: 'pointer', border: 'none', background: '#f1f3f5', borderRadius: '4px', color: '#495057', fontWeight: '500' }}
+                                      >
+                                          全部已读
+                                      </button>
+                                      <button 
+                                          onClick={() => { handleMarkAllUnread('gift'); setShowGiftSettings(false) }}
+                                          style={{ padding: '8px', cursor: 'pointer', border: 'none', background: '#f1f3f5', borderRadius: '4px', color: '#495057', fontWeight: '500' }}
+                                      >
+                                          全部未读
+                                      </button>
                                   </div>
                                   {/* 这里简化了关闭覆盖层/点击外部的处理程序 */}
                               </div>
@@ -1221,47 +1420,72 @@ export default function HomePage() {
                       <div className={styles['col-content']}>
                           {danmuList.filter(item => item.type === 'gift' && shouldShowItem(item)).slice().reverse().map(item => {
                               const msg = item.data
+                              const isRead = readMessages.has(item.id)
+                              const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
                               
                               // Handle GuardMessage (Captain/Admiral/Governor)
                               if (msg instanceof GuardMessage || msg.guard_level) {
                                   const guardName = msg.guard_level === 1 ? '总督' : msg.guard_level === 2 ? '提督' : '舰长'
                                   const priceRMB = msg.price / 1000 
                                   
-                                  if (priceRMB < minGiftPrice) return null
+                                  if (priceRMB <= minGiftPrice) return null
                                   
-                                  const isHighValue = priceRMB > 500
+                                  // Premium Card for Guard
+                                  const cardBg = msg.guard_level === 1 ? '#d32f2f' : // Governor Red
+                                                 msg.guard_level === 2 ? '#7b1fa2' : // Admiral Purple
+                                                                         '#1976d2'   // Captain Blue
 
                                   return (
                                       <div 
                                         key={item.id} 
-                                        className={styles['gift-card']} 
+                                        className={styles['gift-card-anim']}
                                         style={{ 
-                                            borderColor: 'var(--accent-pink)',
-                                            backgroundColor: isHighValue ? 'rgba(255, 183, 178, 0.25)' : 'transparent'
+                                            backgroundColor: cardBg,
+                                            color: '#fff',
+                                            borderRadius: '8px',
+                                            padding: '10px 12px',
+                                            marginBottom: '8px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                                            fontWeight: 'bold',
+                                            border: 'none',
+                                            ...readStyle
                                         }}
+                                        onDoubleClick={() => handleToggleRead(item.id)}
                                       >
-                                          <div className={styles['gift-row-top']}>
-                                              <div 
-                                                style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
-                                                onClick={(e) => handleUserClick(e, msg.sender)}
-                                                data-user-action-trigger="true"
-                                              >
-                                                <img 
-                                                    src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
-                                                    alt="face" 
-                                                    style={{ width: '20px', height: '20px', borderRadius: '50%' }} 
-                                                />
-                                                <span style={{ color: 'var(--accent-yellow)', fontWeight: 'bold' }}>{msg.sender.uname}</span>
-                                              </div>
-                                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                                  <span style={{ color: 'var(--text-secondary)' }}>{moment(msg.timestamp*1000).format('HH:mm:ss')}</span>
-                                                  <span style={{ color: 'var(--accent-pink)', fontWeight: 'bold', fontSize: '12px' }}>￥{priceRMB}</span>
-                                              </div>
+                                          <div 
+                                            style={{ position: 'relative', marginRight: '12px', cursor: 'pointer' }}
+                                            onClick={(e) => handleUserClick(e, msg.sender)}
+                                            data-user-action-trigger="true"
+                                          >
+                                              <img 
+                                                  src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                                                  alt="face" 
+                                                  style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)' }} 
+                                              />
+                                              <img 
+                                                  src={getGuardIcon(msg.guard_level)}
+                                                  style={{ position: 'absolute', bottom: '-4px', right: '-4px', width: '18px', height: '18px' }}
+                                                  alt="icon"
+                                              />
                                           </div>
-                                          <div className={styles['gift-row-bot']}>
-                                              <span style={{ color: 'var(--text-secondary)' }}>开通了</span>
-                                              <span className={styles['gift-name']}>{guardName}</span>
-                                              <span style={{ fontWeight: 'bold' }}>x {msg.num}{msg.unit}</span>
+                                          
+                                          <div style={{ flex: 1 }}>
+                                          <div 
+                                              style={{ fontSize: '15px', lineHeight: '1.2', cursor: 'pointer' }}
+                                              onClick={(e) => handleUserClick(e, msg.sender)}
+                                              data-user-action-trigger="true"
+                                          >
+                                              {msg.sender.uname}
+                                          </div>
+                                          <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '4px' }}>
+                                              开通了 {guardName} x{msg.num}{msg.unit}
+                                          </div>
+                                      </div>
+                                          
+                                          <div style={{ fontSize: '16px', marginLeft: '8px' }}>
+                                              ￥{priceRMB}
                                           </div>
                                       </div>
                                   )
@@ -1287,42 +1511,141 @@ export default function HomePage() {
                                       // valueText = `${total} Silver`
                                   }
                               }
-
+  
                               // 过滤逻辑
-                              if (valueRMB < minGiftPrice) return null
+                              if (valueRMB <= minGiftPrice) return null
 
                               const isHighValue = valueRMB > 500
+                              
+                              // 获取图片 URL
+                              const giftImg = config ? config.img : (msg.gift_info.webp || msg.gift_info.img_basic)
+
+                              // 如果价值 <= 29，使用单行显示 (和弹幕类似)
+                              if (valueRMB <= 29) {
+                                  return (
+                                       <div 
+                                         key={item.id} 
+                                         className={styles['danmu-item']} // 复用弹幕行样式
+                                         style={{ display: 'flex', alignItems: 'center', padding: '4px 8px', flexWrap: 'wrap', gap: '4px', ...readStyle }}
+                                         onDoubleClick={() => handleToggleRead(item.id)}
+                                       >
+                                           <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                                               {/* 头像 */}
+                                               <img 
+                                                   src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                                                   alt="face" 
+                                                   style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', cursor: 'pointer' }} 
+                                                   onClick={(e) => handleUserClick(e, msg.sender)}
+                                                   data-user-action-trigger="true"
+                                               />
+                                               
+                                               {/* 勋章 */}
+                                               {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
+                                                   <span 
+                                                     className={styles['medal-badge']}
+                                                     style={{
+                                                       borderColor: getMedalColor(msg.sender.medal_info.medal_level),
+                                                       backgroundColor: getMedalColor(msg.sender.medal_info.medal_level),
+                                                       backgroundImage: 'none',
+                                                       marginRight: '6px',
+                                                       whiteSpace: 'nowrap'
+                                                     }}
+                                                   >
+                                                       {msg.sender.medal_info.medal_name}|{msg.sender.medal_info.medal_level}
+                                                   </span>
+                                               )}
+                                               
+                                               {/* 用户名 (黑色加粗) */}
+                                               <span 
+                                                   style={{ color: '#333', fontWeight: 'bold', marginRight: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                                   onClick={(e) => handleUserClick(e, msg.sender)}
+                                                   data-user-action-trigger="true"
+                                               >
+                                                   {msg.sender.uname}
+                                               </span>
+                                           </div>
+                                           
+                                           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
+                                               <span style={{ color: '#666', marginRight: '4px', whiteSpace: 'nowrap' }}>投喂</span>
+     
+                                               {/* 礼物图片 */}
+                                               {giftImg && (
+                                                   <img 
+                                                       src={giftImg} 
+                                                       alt="gift" 
+                                                       style={{ width: '24px', height: '24px', marginRight: '4px', objectFit: 'contain' }} 
+                                                   />
+                                               )}
+                                               
+                                               {/* 礼物名称 (蓝色) */}
+                                               <span style={{ color: '#00a1d6', fontWeight: 'bold', marginRight: '4px', whiteSpace: 'nowrap' }}>
+                                                   {msg.gift_info.name} x{msg.num}
+                                               </span>
+                                               
+                                               {/* 价值 */}
+                                               {valueText && (
+                                                   <span style={{ color: '#00a1d6', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                                                       ({valueText})
+                                                   </span>
+                                               )}
+                                           </div>
+                                       </div>
+                                  )
+                              }
 
                               return (
                                   <div 
                                     key={item.id} 
-                                    className={styles['gift-card']}
+                                    className={styles['gift-card-anim']}
                                     style={{
-                                        backgroundColor: isHighValue ? 'rgba(255, 246, 143, 0.3)' : 'transparent'
+                                        backgroundColor: valueRMB > 99 ? '#E8A900' : '#f085a5', // 金色 (>99) 或 粉色
+                                        color: '#fff',
+                                        borderRadius: '8px',
+                                        padding: '10px 12px',
+                                        marginBottom: '8px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                                        fontWeight: 'bold',
+                                        border: 'none',
+                                        ...readStyle
                                     }}
+                                    onDoubleClick={() => handleToggleRead(item.id)}
                                   >
-                                      <div className={styles['gift-row-top']}>
+                                      <div 
+                                        style={{ position: 'relative', marginRight: '12px', cursor: 'pointer' }}
+                                        onClick={(e) => handleUserClick(e, msg.sender)}
+                                        data-user-action-trigger="true"
+                                      >
+                                          <img 
+                                              src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                                              alt="face" 
+                                              style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)' }} 
+                                          />
+                                      </div>
+                                      
+                                      <div style={{ flex: 1 }}>
                                           <div 
-                                            style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
-                                            onClick={(e) => handleUserClick(e, msg.sender)}
-                                            data-user-action-trigger="true"
+                                              style={{ fontSize: '15px', lineHeight: '1.2', cursor: 'pointer' }}
+                                              onClick={(e) => handleUserClick(e, msg.sender)}
+                                              data-user-action-trigger="true"
                                           >
-                                            <img 
-                                                src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
-                                                alt="face" 
-                                                style={{ width: '20px', height: '20px', borderRadius: '50%' }} 
-                                            />
-                                            <span style={{ color: 'var(--accent-yellow)', fontWeight: 'bold' }}>{msg.sender.uname}</span>
+                                              {msg.sender.uname}
                                           </div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                              <span style={{ color: 'var(--text-secondary)' }}>{moment(msg.timestamp*1000).format('HH:mm:ss')}</span>
-                                              {valueText && <span style={{ color: 'var(--accent-pink)', fontWeight: 'bold', fontSize: '12px' }}>{valueText}</span>}
+                                          <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '4px' }}>
+                                              {msg.action} {msg.gift_info.name} x{msg.num}
                                           </div>
                                       </div>
-                                      <div className={styles['gift-row-bot']}>
-                                          <span style={{ color: 'var(--text-secondary)' }}>{msg.action}</span>
-                                          <span className={styles['gift-name']}>{msg.gift_info.name}</span>
-                                          <span style={{ fontWeight: 'bold' }}>x {msg.num}</span>
+                                      
+                                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginLeft: '8px' }}>
+                                          {giftImg && (
+                                              <img 
+                                                  src={giftImg} 
+                                                  alt="gift" 
+                                                  style={{ width: '32px', height: '32px', marginBottom: '2px', objectFit: 'contain' }} 
+                                              />
+                                          )}
+                                          <div style={{ fontSize: '14px' }}>￥{valueRMB.toFixed(1)}</div>
                                       </div>
                                   </div>
                               )
