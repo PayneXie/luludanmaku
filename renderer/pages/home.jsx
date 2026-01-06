@@ -14,6 +14,7 @@ import DebugPanel from '@/components/DebugPanel' // 引入调试面板
 import UserActionMenu from '@/components/UserActionMenu' // 引入用户操作菜单
 import Linkify from '@/components/Linkify' // 引入链接识别组件
 import LiveTimer from '@/components/LiveTimer' // 引入直播计时组件
+import FlipCounter from '@/components/FlipCounter' // 引入翻页计数器组件
 
 import level1 from '../public/images/level1.png'
 import level2 from '../public/images/level2.png'
@@ -33,6 +34,9 @@ export default function HomePage() {
   
   // 房间信息（标题、状态等）
   const [roomInfo, setRoomInfo] = useState(null)
+  const [onlineCount, setOnlineCount] = useState(0) // 高能值 (Online Rank Count)
+  const [onlineTrend, setOnlineTrend] = useState(null) // 'up' | 'down'
+  const prevOnlineCountRef = useRef(0)
   const roomInfoTimer = useRef(null)
   
   // 是否是当前房间管理员
@@ -461,6 +465,7 @@ export default function HomePage() {
     
     // 清空之前的列表
     setDanmuList([])
+    setOnlineCount(0)
     
     addSystemMessage(`直播间已连接：${roomId}`)
 
@@ -503,6 +508,24 @@ export default function HomePage() {
       // 设置监听器
       // 使用 ref 来保存监听器，以便稍后移除
       const msgHandler = (event, msg) => {
+         // Handle High Energy Update
+         if (msg.cmd === 'ONLINE_RANK_COUNT') {
+             if (msg.data && typeof msg.data.count === 'number') {
+                 const newCount = msg.data.count
+                 const prevCount = prevOnlineCountRef.current
+                 
+                 if (newCount > prevCount) {
+                     setOnlineTrend('up')
+                 } else if (newCount < prevCount) {
+                     setOnlineTrend('down')
+                 }
+                 
+                 prevOnlineCountRef.current = newCount
+                 setOnlineCount(newCount)
+             }
+             return
+         }
+
          // 根据要求保留所有消息
          setDanmuList(prev => {
              const newList = [...prev, { 
@@ -725,72 +748,83 @@ export default function HomePage() {
             }}
           >
               {/* 头部 */}
-              <div className={styles['console-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px' }}>
-                  <div className={styles['room-info']} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div className={styles['console-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', backgroundColor: '#fff', borderBottom: '1px solid #eee' }}>
+                  <div className={styles['room-info']} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       {/* 用户头像 */}
                       {userInfo?.face && (
                           <img 
                               src={userInfo.face} 
                               alt="avatar" 
-                              style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} 
+                              style={{ width: '44px', height: '44px', borderRadius: '50%', border: '2px solid #f0f0f0' }} 
                           />
                       )}
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <strong style={{ fontSize: '14px' }}>直播间: {roomId}</strong>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontSize: '12px', color: '#888' }}>
-                                  用户: {userInfo?.uname || userInfo?.DedeUserID}
-                              </span>
-                              {isAdmin && (
-                                  <span style={{ 
-                                      fontSize: '10px', color: '#fff', backgroundColor: '#fb7299', 
-                                      padding: '1px 4px', borderRadius: '4px', lineHeight: '12px' 
-                                  }}>
-                                      管理员
-                                  </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {/* 标题行 */}
+                          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#333', lineHeight: '1.2' }}>
+                              {roomInfo ? roomInfo.title : `直播间: ${roomId}`}
+                          </div>
+                          
+                          {/* 信息行 */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: '#666' }}>
+                              <span>直播间: {roomId}</span>
+                              
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <span>用户: {userInfo?.uname || userInfo?.DedeUserID}</span>
+                                  {isAdmin && (
+                                      <span style={{ 
+                                          fontSize: '10px', color: '#fff', backgroundColor: '#fb7299', 
+                                          padding: '1px 4px', borderRadius: '3px', lineHeight: '14px' 
+                                      }}>
+                                          管理员
+                                      </span>
+                                  )}
+                              </div>
+                              
+                              {/* 高能数值 */}
+                              {onlineCount > 0 && (
+                                  <>
+                                      <div style={{ width: '1px', height: '10px', backgroundColor: '#ddd' }}></div>
+                                      <span style={{ color: '#000', fontWeight: 'normal', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                          高能: <FlipCounter value={onlineCount} />
+                                          {onlineTrend === 'up' && (
+                                              <svg width="12" height="12" viewBox="0 0 24 24" fill="#e53935">
+                                                  <path d="M12 4l-8 8h16z" />
+                                              </svg>
+                                          )}
+                                          {onlineTrend === 'down' && (
+                                              <svg width="12" height="12" viewBox="0 0 24 24" fill="#43a047">
+                                                  <path d="M12 20l-8-8h16z" />
+                                              </svg>
+                                          )}
+                                      </span>
+                                  </>
+                              )}
+
+                              {/* 直播状态 */}
+                              {roomInfo && (
+                                  <>
+                                      <div style={{ width: '1px', height: '10px', backgroundColor: '#ddd' }}></div>
+                                      {roomInfo.live_status === 1 ? (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                              <span style={{ color: '#fff', backgroundColor: '#fb7299', padding: '0 6px', borderRadius: '3px', fontSize: '11px', lineHeight: '18px' }}>直播中</span>
+                                              {roomInfo.live_time && (
+                                                  <div style={{ 
+                                                       fontSize: '14px', fontWeight: 'bold', color: '#fb7299',
+                                                       backgroundColor: '#fff0f6', padding: '0 6px', borderRadius: '4px',
+                                                       fontFamily: '"Microsoft YaHei", sans-serif'
+                                                  }}>
+                                                       <LiveTimer startTime={roomInfo.live_time} />
+                                                  </div>
+                                              )}
+                                          </div>
+                                      ) : (
+                                          <span style={{ color: '#999', border: '1px solid #999', padding: '0 6px', borderRadius: '3px', fontSize: '11px' }}>未开播</span>
+                                      )}
+                                  </>
                               )}
                           </div>
                       </div>
                   </div>
-
-                  {/* 直播间状态信息 */}
-                  {roomInfo && (
-                      <div style={{ flex: 1, marginLeft: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                          <div style={{ fontSize: '15px', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '400px', marginBottom: '4px' }} title={roomInfo.title}>
-                              {roomInfo.title}
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              {roomInfo.live_status === 1 ? (
-                                  <>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-                                          <span style={{ color: '#fff', backgroundColor: '#fb7299', padding: '0 4px', borderRadius: '2px', fontSize: '10px', lineHeight: '16px' }}>直播中</span>
-                                          {roomInfo.live_time && (
-                                              <span style={{ color: '#888' }}>
-                                                  {getLiveStartMoment(roomInfo.live_time).format('MM-DD HH:mm')} 开播
-                                              </span>
-                                          )}
-                                      </div>
-                                      
-                                      {roomInfo.live_time && (
-                                          <div style={{ 
-                                               display: 'flex', alignItems: 'center', gap: '8px', 
-                                               fontSize: '14px', fontWeight: 'bold', color: '#333',
-                                               backgroundColor: '#f6f7f8', padding: '4px 10px', borderRadius: '6px',
-                                               border: '1px solid #eee'
-                                           }}>
-                                               <span style={{ color: '#666', fontSize: '13px', fontWeight: 'normal' }}>直播时长</span>
-                                               <span style={{ fontFamily: '"HarmonyOS Sans", "Microsoft YaHei", sans-serif', fontVariantNumeric: 'tabular-nums', color: '#fb7299', fontSize: '16px' }}>
-                                                   <LiveTimer startTime={roomInfo.live_time} />
-                                               </span>
-                                           </div>
-                                      )}
-                                  </>
-                              ) : (
-                                  <span style={{ color: '#999', border: '1px solid #999', padding: '0 4px', borderRadius: '2px', fontSize: '10px', lineHeight: '14px' }}>未开播</span>
-                              )}
-                          </div>
-                      </div>
-                  )}
                   
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {/* 置顶按钮（图钉图标） */}

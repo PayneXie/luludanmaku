@@ -26,7 +26,12 @@ export default function LiveTimer({ startTime }) {
             const seconds = durationObj.seconds()
             
             const fmt = (n) => n < 10 ? '0' + n : n
-            setDuration(`${fmt(hours)}:${fmt(minutes)}:${fmt(seconds)}`)
+            
+            if (hours > 0) {
+                setDuration(`${fmt(hours)}:${fmt(minutes)}:${fmt(seconds)}`)
+            } else {
+                setDuration(`${fmt(minutes)}:${fmt(seconds)}`)
+            }
         }
 
         updateTimer()

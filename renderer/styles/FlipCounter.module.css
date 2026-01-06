@@ -1,0 +1,30 @@
+.counterWrapper {
+  display: inline-flex;
+  align-items: center;
+  font-family: "Microsoft YaHei", sans-serif; /* Match LiveTimer font */
+  font-weight: bold;
+  font-size: 16px; /* Increased font size */
+  line-height: 1;
+}
+
+.digitWindow {
+  height: 20px; /* Match font-size/line-height */
+  width: 9px; /* More compact */
+  overflow: hidden;
+  position: relative;
+}
+
+.digitStrip {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); /* Elastic effect */
+  will-change: transform;
+}
+
+.digit {
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 20px;
+}

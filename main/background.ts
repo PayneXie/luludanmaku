@@ -256,6 +256,9 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
             event.reply('danmu-message', msg)
           } else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
             event.reply('danmu-message', msg)
+          } else if (msg.cmd === 'ONLINE_RANK_COUNT') {
+             // High Energy / Online Count Update
+             event.reply('danmu-message', msg)
           } else if (msg.cmd === 'STOP_LIVE_ROOM_LIST') {
              // System message, ignore in production
              // console.log('Ignored system msg:', msg.cmd)
