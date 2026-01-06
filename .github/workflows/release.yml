@@ -36,7 +36,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest]
 
     steps:
       - name: Checkout code
@@ -60,19 +60,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win --x64
 
-      - name: Package Electron App (macOS)
-        if: matrix.os == 'macos-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --mac --universal
-
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-artifacts
           path: |
             dist/*.exe
-            dist/*.dmg
             dist/*.zip
 
   release:
@@ -104,7 +97,5 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/windows-latest-artifacts/*.exe
-            artifacts/macos-latest-artifacts/*.dmg
-            artifacts/macos-latest-artifacts/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
