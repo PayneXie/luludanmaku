@@ -332,6 +332,62 @@ export function AddSilentUser(cookies: BiliCookies, roomId: number, targetUid: n
   })
 }
 
+export function GetBiliUserInfo(cookies: BiliCookies, mid: number): Promise<any> {
+  return new Promise(async (resolve, reject) => {
+    const cookieStr = cookiesToString(cookies)
+    
+    // Use WBI sign for parameters
+    let params: any = {
+      mid: mid
+    }
+    
+    let queryString = ''
+    try {
+        queryString = await wbi_sign(params, cookieStr)
+    } catch (e) {
+        console.error('WBI sign failed', e)
+        queryString = `mid=${mid}` // fallback
+    }
+
+    const headers: any = {
+        cookie: cookieStr + (cookies && !cookieStr.includes('buvid3') ? ' buvid3=' + uuidv4() + 'infoc;' : ''),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.bilibili.com/',
+        'Origin': 'https://www.bilibili.com'
+    }
+    
+    const options = {
+      hostname: 'api.bilibili.com',
+      path: `/x/space/wbi/acc/info?${queryString}`,
+      method: 'GET',
+      headers: headers,
+    }
+    
+    const req = https.request(options, (res) => {
+      let data = ''
+      res.on('data', (chunk) => {
+        data += chunk
+      })
+      res.on('end', () => {
+        try {
+          const resp = JSON.parse(data)
+          if (resp.code === 0) {
+            resolve(resp.data)
+          } else {
+            reject(new Error(resp.message || `API Error Code: ${resp.code}`))
+          }
+        } catch (e) {
+          reject(e)
+        }
+      })
+      res.on('error', (err) => {
+        reject(err)
+      })
+    })
+    req.end()
+  })
+}
+
 export function GetUserInfo(cookies: BiliCookies): Promise<any> {
   return new Promise((resolve, reject) => {
     const options = {

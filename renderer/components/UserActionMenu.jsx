@@ -1,9 +1,30 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import styles from '@/styles/console.module.css'
 
 const UserActionMenu = ({ user, position, onClose, onFilter, onHighlight, isHighlighted, isAdmin, onMute }) => {
   const menuRef = useRef(null)
   const [showMuteOptions, setShowMuteOptions] = useState(false)
+  const [imgLoaded, setImgLoaded] = useState(false)
+
+  // 当用户变化时，重置图片加载状态
+  useEffect(() => {
+      // 只有当 face 存在且不是默认 noface 时，才认为“可能”需要加载动画
+      // 如果 user.face 变了，我们先设为 false，让 img 的 onLoad 去触发 true
+      // 除非是默认头像，默认头像不需要动画，直接显示
+      const isDefault = !user.face || user.face.includes('noface.jpg')
+      if (isDefault) {
+          setImgLoaded(true)
+      } else {
+          setImgLoaded(false)
+          // 预加载检查缓存
+          const img = new Image()
+          img.src = user.face
+          if (img.complete) {
+              setImgLoaded(true)
+          }
+      }
+  }, [user.face])
 
   const MUTE_OPTIONS = [
     { label: '本场直播', value: 0 },
@@ -92,11 +113,33 @@ const UserActionMenu = ({ user, position, onClose, onFilter, onHighlight, isHigh
               borderBottom: '1px solid rgba(0,0,0,0.05)',
               background: 'linear-gradient(to bottom, rgba(255,255,255,0.5), rgba(255,255,255,0.8))'
           }}>
-            <img 
-              src={user.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
-              alt={user.uname}
-              style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid white', marginRight: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
-            />
+            <div style={{ width: '48px', height: '48px', marginRight: '12px', position: 'relative' }}>
+                {!imgLoaded && (
+                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className={styles['loading-spinner']} style={{ width: '24px', height: '24px' }}></div>
+                    </div>
+                )}
+                <img 
+                  src={user.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                  alt={user.uname}
+                  onLoad={() => setImgLoaded(true)}
+                  onError={(e) => { 
+                      e.target.src = 'https://i0.hdslb.com/bfs/face/member/noface.jpg'
+                      setImgLoaded(true) 
+                  }}
+                  referrerPolicy="no-referrer"
+                  style={{ 
+                      width: '48px', 
+                      height: '48px', 
+                      borderRadius: '50%', 
+                      border: '2px solid white', 
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                      opacity: imgLoaded ? 1 : 0,
+                      transition: 'opacity 0.2s',
+                      objectFit: 'cover'
+                  }}
+                />
+            </div>
             <div style={{ flex: 1, overflow: 'hidden' }}>
               <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#333', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user.uname}

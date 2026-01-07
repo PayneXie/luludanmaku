@@ -130,8 +130,8 @@ export class GuardMessage {
     // Sender info
     this.sender.uid = body.data.uid
     this.sender.uname = body.data.username
-    // Guard message usually doesn't have face in the root data, might need to fetch or leave empty
-    this.sender.face = '' 
+    // Use face injected from backend if available
+    this.sender.face = body.data.face || '' 
 
     this.num = body.data.num
     this.unit = body.data.unit

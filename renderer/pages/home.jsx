@@ -72,6 +72,8 @@ export default function HomePage() {
   const [status, setStatus] = useState('初始化中...')
   const [loggedIn, setLoggedIn] = useState(false)
   const [userInfo, setUserInfo] = useState(null)
+  const userInfoRef = useRef(userInfo)
+  useEffect(() => { userInfoRef.current = userInfo }, [userInfo])
   
   // 弹幕状态
   const [roomId, setRoomId] = useState('')
@@ -430,14 +432,6 @@ export default function HomePage() {
   const handleUserClick = useCallback((e, user) => {
       e.stopPropagation()
       
-      // Toggle logic: If clicking the same user, close the menu
-      // 注意：selectedUser 是外部依赖，但我们需要在这里获取最新值吗？
-      // 为了保持 handleUserClick 的引用稳定，我们最好不要依赖 selectedUser
-      // 或者使用 setState 的 callback 形式，但这只能用于设置。
-      // 这里为了简单，我们先不优化 toggle 逻辑的依赖，或者我们可以让 UserActionMenu 处理关闭。
-      // 实际上，我们不需要在这里做 toggle check，因为每次点击都是新的事件。
-      // 如果要绝对稳定，可以把 user 传给 setSelectedUser 的函数形式。
-      
       const rect = e.currentTarget.getBoundingClientRect()
       
       let x = rect.left
@@ -457,6 +451,26 @@ export default function HomePage() {
           }
           return { user, position: { x, y } }
       })
+
+      // Fetch face if missing
+      if (!user.face && user.uid) {
+          window.ipc.invoke('bilibili-get-user-info-details', { 
+              cookies: userInfoRef.current || {}, 
+              mid: user.uid 
+          }).then(res => {
+              if (res.success && res.data.face) {
+                  setSelectedUser(current => {
+                      if (current && String(current.user.uid) === String(user.uid)) {
+                          return {
+                              ...current,
+                              user: { ...current.user, face: res.data.face }
+                          }
+                      }
+                      return current
+                  })
+              }
+          }).catch(err => console.error('Failed to fetch user face:', err))
+      }
   }, []) // 没有任何依赖，永远稳定
   
   const handleFilterUser = (user) => {
@@ -739,6 +753,17 @@ export default function HomePage() {
 
     } catch (e) {
       console.error(e)
+      
+      // Check for auth error (Cookie expired)
+      // Usually code -101 means Not Logged In
+      if (e.code === -101 || (e.message && e.message.includes('-101'))) {
+          alert('登录凭证已过期，请重新扫码登录')
+          setLoggedIn(false)
+          setUserInfo(null)
+          initLogin()
+          return
+      }
+
       const errText = 'Connection Failed: ' + (e.message || 'Unknown error')
       setDanmuStatus(errText)
       addSystemMessage(errText)
@@ -758,6 +783,11 @@ export default function HomePage() {
               }))
           } else {
               console.error('Failed to fetch user info:', res.error)
+              // Also check here if needed, but usually connectDanmu is the main gate
+              if (res.error && (res.error.code === -101 || String(res.error).includes('-101'))) {
+                  // Optional: Auto logout here too?
+                  // Maybe just log for now, as connectDanmu is the explicit action
+              }
           }
       } catch (e) {
           console.error('IPC error fetching user info:', e)

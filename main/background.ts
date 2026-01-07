@@ -2,13 +2,14 @@ import path from 'path'
 import { app, ipcMain, Menu, BrowserWindow, shell } from 'electron'
 import serve from 'electron-serve'
 import { createWindow } from './helpers'
-import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo, BiliCookies, GetUserInfo, GetRoomInfo, GetSilentUserList, AddSilentUser } from './lib/bilibili_login'
+import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo, BiliCookies, GetUserInfo, GetBiliUserInfo, GetRoomInfo, GetSilentUserList, AddSilentUser } from './lib/bilibili_login'
 import { BiliWebSocket, WsInfo, PackResult } from './lib/bilibili_socket'
 
 const isProd = process.env.NODE_ENV === 'production'
 let activeBiliSocket: BiliWebSocket | null = null
 let messageBuffer: any[] = []
 let messageTimer: NodeJS.Timeout | null = null
+let activeCookies: BiliCookies = {} // Store cookies globally in main process
 
 if (isProd) {
   serve({ directory: 'app' })
@@ -266,7 +267,7 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
 
     activeBiliSocket = new BiliWebSocket(wsInfo, (packet: PackResult) => {
        // Filter for DANMU_MSG or other interest
-       packet.body.forEach(msg => {
+       packet.body.forEach(async msg => {
           // console.log('Forwarding MSG:', msg.cmd) // Debug
           if (msg.cmd === 'DANMU_MSG' || 
               msg.cmd === 'INTERACT_WORD' || 
@@ -274,11 +275,25 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
               msg.cmd === 'ENTRY_EFFECT' || 
               msg.cmd === 'SEND_GIFT' || 
               msg.cmd === 'SUPER_CHAT_MESSAGE' || 
-              msg.cmd === 'ONLINE_RANK_COUNT' ||
-              msg.cmd === 'USER_TOAST_MSG') {
+              msg.cmd === 'ONLINE_RANK_COUNT') {
             
             messageBuffer.push(msg)
 
+          } else if (msg.cmd === 'USER_TOAST_MSG') {
+             // Fetch user info for Guard message to get avatar
+             try {
+                // Use stored activeCookies
+                const uid = msg.data.uid
+                if (uid) {
+                    const userInfo = await GetBiliUserInfo(activeCookies, uid)
+                    if (userInfo && userInfo.face) {
+                        msg.data.face = userInfo.face
+                    }
+                }
+             } catch (e) {
+                console.error('Failed to fetch guard user info', e)
+             }
+             messageBuffer.push(msg)
           } else if (msg.cmd === 'STOP_LIVE_ROOM_LIST') {
              // System message, ignore in production
              // console.log('Ignored system msg:', msg.cmd)
@@ -304,7 +319,7 @@ ipcMain.on('bilibili-disconnect-socket', () => {
 })
 
 // Debug IPC for custom messages
-ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
+ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
   const uid = Number(data.uid) || 12345
   if (type === 'danmu') {
      const senderGuardLevel = Number(data.senderGuardLevel) || 0
@@ -438,6 +453,17 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
     if (level === 1) price = 19998000
     if (level === 2) price = 1998000
     price = price * num
+    
+    // Try to fetch face for mock user
+    let face = "https://i0.hdslb.com/bfs/face/member/noface.jpg"
+    try {
+         const userInfo = await GetBiliUserInfo(activeCookies, uid)
+         if (userInfo && userInfo.face) {
+             face = userInfo.face
+         }
+    } catch(e) {
+        console.error('Failed to fetch debug guard face', e)
+    }
 
     const mockGuard = {
         cmd: 'USER_TOAST_MSG',
@@ -450,7 +476,8 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
             unit: "月",
             start_time: Math.floor(Date.now() / 1000),
             payflow_id: "mock_payflow_" + Date.now(),
-            roomid: 123
+            roomid: 123,
+            face: face // Inject face
         }
     }
     event.reply('danmu-message', mockGuard)
@@ -459,6 +486,9 @@ ipcMain.on('bilibili-debug-send', (event, { type, data }) => {
 
 ipcMain.handle('bilibili-get-danmu-info', async (event, { cookies, roomId }: { cookies: BiliCookies, roomId: number }) => {
   try {
+    if (cookies && Object.keys(cookies).length > 0) {
+        activeCookies = cookies // Update global cookies
+    }
     const result = await GetDanmuInfo(cookies, roomId)
     return { success: true, data: result }
   } catch (error: any) {
@@ -527,10 +557,25 @@ ipcMain.handle('bilibili-add-silent-user', async (event, { cookies, roomId, targ
 
 ipcMain.handle('bilibili-get-user-info', async (event, cookies: BiliCookies) => {
   try {
+    if (cookies && Object.keys(cookies).length > 0) {
+        activeCookies = cookies // Update global cookies
+    }
     const result = await GetUserInfo(cookies)
     return { success: true, data: result }
   } catch (error: any) {
     console.error('Failed to get user info:', error)
+    return { success: false, error: error.message || error }
+  }
+})
+
+ipcMain.handle('bilibili-get-user-info-details', async (event, { cookies, mid }: { cookies: BiliCookies, mid: number }) => {
+  try {
+    // Use activeCookies if cookies are not provided or empty
+    const useCookies = (cookies && Object.keys(cookies).length > 0) ? cookies : activeCookies
+    const result = await GetBiliUserInfo(useCookies, mid)
+    return { success: true, data: result }
+  } catch (error: any) {
+    console.error('Failed to get user info details:', error)
     return { success: false, error: error.message || error }
   }
 })

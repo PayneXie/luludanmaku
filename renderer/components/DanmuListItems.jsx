@@ -259,6 +259,8 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
                     <img 
                         src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
                         alt="face" 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { e.target.src = 'https://i0.hdslb.com/bfs/face/member/noface.jpg' }}
                         style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)' }} 
                     />
                     <img 
