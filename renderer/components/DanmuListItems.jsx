@@ -4,6 +4,7 @@ import Linkify from '@/components/Linkify'
 import level1 from '../public/images/level1.png'
 import level2 from '../public/images/level2.png'
 import level3 from '../public/images/level3.png'
+import { useUserFace } from '../hooks/useUserFace'
 
 // 安全获取图标 URL 的辅助函数
 const getGuardIcon = (level) => {
@@ -24,6 +25,10 @@ const getMedalColor = (level) => {
 
 // 提取的 Memoized 弹幕组件
 export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onUserClick, onToggleRead }) => {
+    // 即使是普通弹幕，我们也尝试用 hook 优化头像（虽然普通弹幕目前没有头像显示，但如果未来加了头像可以用）
+    // 目前 DanmuItem 只有文字，没有头像，所以这里暂时不用 hook。
+    // 如果你想给普通弹幕也加头像，可以在这里用。
+    
     if (item.type === 'msg') {
         const msg = item.data
         const guardLevel = msg.sender.medal_info ? msg.sender.medal_info.guard_level : 0
@@ -149,6 +154,8 @@ export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onU
 // Memoized SC 组件
 export const ScItem = React.memo(({ item, readMessages, onUserClick, onToggleRead }) => {
     const msg = item.data
+    const currentFace = useUserFace(msg.sender.face, msg.sender.uid)
+    
     const levelColor = msg.price >= 2000 ? 'var(--sc-level-5)' :
                        msg.price >= 1000 ? 'var(--sc-level-4)' :
                        msg.price >= 500  ? 'var(--sc-level-3)' :
@@ -170,11 +177,12 @@ export const ScItem = React.memo(({ item, readMessages, onUserClick, onToggleRea
               style={{ backgroundColor: levelColor }}
           >
               <img 
-                  src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                  src={currentFace} 
                   alt="face" 
                   style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '6px', verticalAlign: 'middle', cursor: 'pointer' }} 
                   onClick={(e) => onUserClick(e, msg.sender)}
                   data-user-action-trigger="true"
+                  onError={(e) => { e.target.src = 'https://i0.hdslb.com/bfs/face/member/noface.jpg' }}
               />
               
               {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
@@ -222,6 +230,9 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
     const isRead = readMessages.has(item.id)
     const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
     
+    // 使用 hook 获取最新头像
+    const currentFace = useUserFace(msg.sender.face, msg.sender.uid)
+    
     // Guard
     if (msg.guard_level) { // GuardMessage or similar structure
         const guardName = msg.guard_level === 1 ? '总督' : msg.guard_level === 2 ? '提督' : '舰长'
@@ -257,7 +268,7 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
                   data-user-action-trigger="true"
                 >
                     <img 
-                        src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                        src={currentFace} 
                         alt="face" 
                         referrerPolicy="no-referrer"
                         onError={(e) => { e.target.src = 'https://i0.hdslb.com/bfs/face/member/noface.jpg' }}
@@ -320,11 +331,12 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
              >
                  <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                      <img 
-                         src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                         src={currentFace} 
                          alt="face" 
                          style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', cursor: 'pointer' }} 
                          onClick={(e) => onUserClick(e, msg.sender)}
                          data-user-action-trigger="true"
+                         onError={(e) => { e.target.src = 'https://i0.hdslb.com/bfs/face/member/noface.jpg' }}
                      />
                      
                      {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
@@ -401,9 +413,10 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
               data-user-action-trigger="true"
             >
                 <img 
-                    src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                    src={currentFace} 
                     alt="face" 
                     style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)' }} 
+                    onError={(e) => { e.target.src = 'https://i0.hdslb.com/bfs/face/member/noface.jpg' }}
                 />
             </div>
             

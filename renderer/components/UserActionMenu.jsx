@@ -6,25 +6,49 @@ const UserActionMenu = ({ user, position, onClose, onFilter, onHighlight, isHigh
   const menuRef = useRef(null)
   const [showMuteOptions, setShowMuteOptions] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
+  // Local state for face url, initialized with prop but can be updated
+  const [currentFace, setCurrentFace] = useState(user.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg')
 
-  // 当用户变化时，重置图片加载状态
+  // When user prop changes, reset local face state
   useEffect(() => {
-      // 只有当 face 存在且不是默认 noface 时，才认为“可能”需要加载动画
-      // 如果 user.face 变了，我们先设为 false，让 img 的 onLoad 去触发 true
-      // 除非是默认头像，默认头像不需要动画，直接显示
-      const isDefault = !user.face || user.face.includes('noface.jpg')
+      setCurrentFace(user.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg')
+  }, [user.face])
+
+  // Effect to fetch face if default
+  useEffect(() => {
+      const isDefault = !currentFace || currentFace.includes('noface.jpg')
+      
+      // If it is default face, try to fetch real face from backend
+      if (isDefault && window.electron) {
+          // Use a flag to prevent update if component unmounted
+          let isMounted = true
+          
+          window.electron.ipcRenderer.invoke('fetch-user-face', user.uid).then(realFace => {
+              if (isMounted && realFace && realFace !== currentFace) {
+                  setCurrentFace(realFace)
+              }
+          }).catch(err => {
+              console.error('Failed to fetch face in menu', err)
+          })
+          
+          return () => { isMounted = false }
+      }
+  }, [user.uid, currentFace])
+
+  // Handle image loading state
+  useEffect(() => {
+      const isDefault = !currentFace || currentFace.includes('noface.jpg')
       if (isDefault) {
           setImgLoaded(true)
       } else {
           setImgLoaded(false)
-          // 预加载检查缓存
           const img = new Image()
-          img.src = user.face
+          img.src = currentFace
           if (img.complete) {
               setImgLoaded(true)
           }
       }
-  }, [user.face])
+  }, [currentFace])
 
   const MUTE_OPTIONS = [
     { label: '本场直播', value: 0 },
@@ -120,7 +144,7 @@ const UserActionMenu = ({ user, position, onClose, onFilter, onHighlight, isHigh
                     </div>
                 )}
                 <img 
-                  src={user.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
+                  src={currentFace} 
                   alt={user.uname}
                   onLoad={() => setImgLoaded(true)}
                   onError={(e) => { 

@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>CSS Injection Test (Live)</title>
+    <meta name="referrer" content="no-referrer">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        /* 注入用户提供的 CSS (基础变量) */
+        html:not(.style-scope) {
+            --yt-live-chat-background-color: #fff;
+            --yt-live-chat-action-panel-background-color: hsla(0, 0%, 93%, .4);
+            --yt-live-chat-action-panel-background-color-transparent: hsla(0, 0%, 97%, .8);
+            --yt-live-chat-mode-change-background-color: hsla(0, 0%, 93%, .4);
+            --yt-live-chat-primary-text-color: #111;
+            --yt-live-chat-secondary-text-color: hsla(0, 0%, 7%, .6);
+            --yt-live-chat-tertiary-text-color: hsla(0, 0%, 7%, .4);
+            --yt-live-chat-text-input-field-inactive-underline-color: #b8b8b8;
+            --yt-live-chat-text-input-field-placeholder-color: hsla(0, 0%, 7%, .6);
+            --yt-live-chat-icon-button-color: hsla(0, 0%, 7%, .4);
+            --yt-live-chat-enabled-send-button-color: #4285f4;
+            --yt-live-chat-disabled-icon-button-color: hsla(0, 0%, 7%, .2);
+            --yt-live-chat-picker-button-color: hsla(0, 0%, 7%, .4);
+            --yt-live-chat-picker-button-active-color: hsla(0, 0%, 7%, .8);
+            --yt-live-chat-picker-button-disabled-color: var(--yt-live-chat-disabled-icon-button-color);
+            --yt-live-chat-picker-button-hover-color: hsla(0, 0%, 7%, .6);
+            --yt-live-chat-mention-background-color: #ff5722;
+            --yt-live-chat-mention-text-color: #fff;
+            --yt-live-chat-deleted-message-color: rgba(0, 0, 0, .5);
+            --yt-live-chat-deleted-message-bar-color: hsla(0, 0%, 4%, .2);
+            --yt-live-chat-disabled-button-background-color: #eee;
+            --yt-live-chat-disabled-button-text-color: hsla(0, 0%, 7%, .4);
+            --yt-live-chat-sub-panel-background-color: #eee;
+            --yt-live-chat-sub-panel-background-color-transparent: hsla(0, 0%, 93%, .7);
+            --yt-live-chat-header-background-color: hsla(0, 0%, 93%, .4);
+            --yt-live-chat-header-button-color: #111;
+            --yt-live-chat-error-message-color: #bd523d;
+            --yt-live-chat-reconnect-message-color: hsla(0, 0%, 7%, .2);
+            --yt-live-chat-moderator-color: #5f84f1;
+            --yt-live-chat-owner-color: #e3a935;
+            --yt-live-chat-author-chip-owner-text-color: rgba(0, 0, 0, .87);
+            --yt-live-chat-author-chip-verified-background-color: #ccc;
+            --yt-live-chat-author-chip-verified-text-color: #606060;
+            --yt-live-chat-message-highlight-background-color: #f8f8f8;
+            --yt-live-chat-sponsor-color: #107516;
+            --yt-live-chat-overlay-color: rgba(0, 0, 0, .6);
+            --yt-live-chat-dialog-background-color: #fff;
+            --yt-live-chat-dialog-text-color: hsla(0, 0%, 7%, .6);
+            --yt-live-chat-poll-choice-text-color: var(--yt-spec-text-secondary);
+            --yt-live-chat-poll-choice-border-color: var(--yt-spec-10-percent-layer);
+            --yt-live-chat-poll-choice-vote-bar-background-color: hsla(0, 0%, 93%, .8);
+            --yt-live-chat-poll-choice-vote-bar-background-color-selected: #f2f8ff;
+            --yt-live-chat-poll-choice-color-selected: #065fd4;
+            --yt-live-chat-moderation-mode-hover-background-color: hsla(0, 0%, 7%, .2);
+            --yt-live-chat-additional-inline-action-button-color: #fff;
+            --yt-live-chat-additional-inline-action-button-background-color: rgba(66, 66, 66, .8);
+            --yt-live-chat-additional-inline-action-button-background-color-hover: #424242;
+            --yt-formatted-string-emoji-size: 24px;
+            --yt-live-chat-emoji-size: 24px;
+            --yt-live-chat-text-input-field-suggestion-background-color: #fff;
+            --yt-live-chat-text-input-field-suggestion-background-color-hover: #eee;
+            --yt-live-chat-text-input-field-suggestion-text-color: #666;
+            --yt-live-chat-text-input-field-suggestion-text-color-hover: #333;
+            --yt-live-chat-ticker-arrow-background: #f8f8f8;
+            --yt-emoji-picker-category-background-color: var(--yt-live-chat-action-panel-background-color-transparent);
+            --yt-emoji-picker-category-color: var(--yt-live-chat-secondary-text-color);
+            --yt-emoji-picker-category-button-color: var(--yt-live-chat-picker-button-color);
+            --yt-emoji-picker-search-background-color: hsla(0, 0%, 100%, .6);
+            --yt-emoji-picker-search-color: hsla(0, 0%, 7%, .8);
+            --yt-emoji-picker-search-placeholder-color: hsla(0, 0%, 7%, .6);
+            --yt-live-chat-slider-active-color: #2196f3;
+            --yt-live-chat-slider-container-color: #c8c8c8;
+            --yt-live-chat-slider-markers-color: #505050;
+            --yt-live-chat-toast-background-color: #333;
+            --yt-live-chat-toast-text-color: #fff;
+            --yt-live-chat-automod-button-background-color: #eee;
+            --yt-live-chat-automod-button-background-color-hover: hsla(0, 0%, 7%, .2);
+            --yt-live-chat-countdown-opacity: 0.3;
+            --yt-live-chat-shimmer-background-color: hsla(0, 0%, 53%, .2);
+            --yt-live-chat-shimmer-linear-gradient: linear-gradient(0deg, hsla(0, 0%, 100%, 0) 40%, hsla(0, 0%, 100%, .5) 50%, hsla(0, 0%, 100%, 0) 65%);
+            --yt-live-chat-vem-background-color: #eee;
+            --yt-live-chat-upsell-dialog-renderer-button-padding: 10px 16px;
+            --yt-live-chat-product-picker-icon-color: hsla(0, 0%, 7%, .6);
+            --yt-live-chat-product-picker-hover-color: rgba(17, 17, 16, .1);
+            --yt-live-chat-product-picker-disabled-icon-color: hsla(0, 0%, 7%, .4);
+            --yt-pdg-paid-stickers-tab-selection-bar-color: #065fd4;
+            --yt-pdg-paid-stickers-author-name-font-size: 13px;
+            --yt-pdg-paid-stickers-margin-left: 38px;
+            --layout-flex_-_flex: 1;
+        }
+
+        /* --------------------------
+           注入用户提供的自定义 CSS
+           -------------------------- */
+        @import url("https://fonts.googleapis.com/css?family=Noto%20Sans%20SC");
+ 
+        /* Transparent background */ 
+        yt-live-chat-renderer { 
+            background-color: transparent !important; 
+        } 
+        
+        yt-live-chat-ticker-renderer { 
+            background-color: transparent !important; 
+            box-shadow: none !important; 
+        } 
+        
+        yt-live-chat-author-chip #author-name { 
+            background-color: transparent !important; 
+        } 
+        
+        /* Hide scrollbar */ 
+        yt-live-chat-item-list-renderer #items { 
+            overflow: hidden !important; 
+        } 
+        
+        yt-live-chat-item-list-renderer #item-scroller { 
+            overflow: hidden !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer #content, 
+        yt-live-chat-membership-item-renderer #content { 
+            overflow: visible !important; 
+        } 
+        
+        /* Hide header and input */ 
+        yt-live-chat-header-renderer, 
+        yt-live-chat-message-input-renderer { 
+            display: none !important; 
+        } 
+        
+        /* Hide unimportant messages */ 
+        yt-live-chat-text-message-renderer[is-deleted], 
+        yt-live-chat-membership-item-renderer[is-deleted] { 
+            display: none !important; 
+        } 
+        
+        yt-live-chat-mode-change-message-renderer,  
+        yt-live-chat-viewer-engagement-message-renderer,  
+        yt-live-chat-restricted-participation-renderer { 
+            display: none !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer a, 
+        yt-live-chat-membership-item-renderer a { 
+            text-decoration: none !important; 
+        } 
+        
+        /* Reduce side padding */ 
+        yt-live-chat-text-message-renderer { 
+            padding-left: 4px !important; 
+            padding-right: 4px !important; 
+        } 
+        
+        /* Avatars */ 
+        yt-live-chat-text-message-renderer #author-photo, 
+        yt-live-chat-text-message-renderer #author-photo img, 
+        yt-live-chat-paid-message-renderer #author-photo, 
+        yt-live-chat-paid-message-renderer #author-photo img, 
+        yt-live-chat-membership-item-renderer #author-photo, 
+        yt-live-chat-membership-item-renderer #author-photo img { 
+            
+            width: 40px !important; 
+            height: 40px !important; 
+            border-radius: 40px !important; 
+            margin-right: 10px !important; 
+        } 
+        
+        /* Channel names */ 
+        yt-live-chat-text-message-renderer yt-live-chat-author-chip { 
+            margin-bottom: 5px; 
+        } 
+        
+        yt-live-chat-text-message-renderer #author-name[type="owner"], 
+        yt-live-chat-text-message-renderer yt-live-chat-author-badge-renderer[type="owner"] { 
+            color: #ffd600 !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer #author-name[type="moderator"], 
+        yt-live-chat-text-message-renderer yt-live-chat-author-badge-renderer[type="moderator"] { 
+            color: #5e84f1 !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer #author-name[type="member"], 
+        yt-live-chat-text-message-renderer yt-live-chat-author-badge-renderer[type="member"] { 
+            color: #0f9d58 !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer #author-name { 
+            
+            color: #cccccc !important; 
+            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
+            font-size: 20px !important; 
+            line-height: 22px !important; 
+        } 
+        
+        /* Hide badges */ 
+        yt-live-chat-text-message-renderer #chat-badges { 
+            
+            vertical-align: text-top !important; 
+        } 
+        
+        /* Messages */ 
+        yt-live-chat-text-message-renderer #message, 
+        yt-live-chat-text-message-renderer #message * { 
+            color: #000000 !important; 
+            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
+            font-size: 18px !important; 
+            line-height: 20px !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer #message { 
+            display: block !important; 
+            position: relative; 
+            width: fit-content; 
+            overflow: visible !important; 
+            padding: 15px; 
+            border-radius: 24px; 
+        } 
+        
+        yt-live-chat-text-message-renderer #message:has(.emoji.blc-large-emoji) { 
+            
+        } 
+        
+        yt-live-chat-text-message-renderer #message .emoji { 
+            width: auto !important; 
+            height: 18px !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer #message .emoji.blc-large-emoji { 
+            height: 36px !important; 
+        } 
+        
+        /* The triangle beside dialog */ 
+        yt-live-chat-text-message-renderer #message::before { 
+            content: ""; 
+            display: inline-block; 
+            position: absolute; 
+            top: -3px; 
+            left: -10px; 
+            border: 8px solid transparent; 
+            border-right: 18px solid; 
+            transform: rotate(35deg); 
+        } 
+        
+        yt-live-chat-text-message-renderer #message:has(.emoji.blc-large-emoji)::before { 
+            
+        } 
+        
+        
+        
+        /* Timestamps */ 
+        yt-live-chat-text-message-renderer #timestamp { 
+            display: none !important; 
+            color: #999999 !important; 
+            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
+            font-size: 16px !important; 
+            line-height: 16px !important; 
+        } 
+        
+        /* Background colors */ 
+        body { 
+            overflow: hidden; 
+            background-color: rgba(0, 0, 0, 0); 
+        } 
+        
+        yt-live-chat-text-message-renderer #message { 
+            background-color: #ffffff !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer #message::before { 
+            border-right-color: #ffffff; 
+        } 
+        
+        yt-live-chat-text-message-renderer[author-type="owner"] #message { 
+            background-color: rgba(231, 199, 30, 1) !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer[author-type="owner"] #message::before { 
+            border-right-color: rgba(231, 199, 30, 1); 
+        } 
+        
+        yt-live-chat-text-message-renderer[author-type="moderator"] #message { 
+            background-color: rgba(41, 95, 251, 1) !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer[author-type="moderator"] #message::before { 
+            border-right-color: rgba(41, 95, 251, 1); 
+        } 
+        
+        yt-live-chat-text-message-renderer[author-type="member"] #message { 
+            background-color: rgba(43, 234, 43, 1) !important; 
+        } 
+        
+        yt-live-chat-text-message-renderer[author-type="member"] #message::before { 
+            border-right-color: rgba(43, 234, 43, 1); 
+        } 
+        
+        yt-live-chat-text-message-renderer #message:has(.emoji.blc-large-emoji) { 
+            
+        } 
+        
+        /* SuperChat/Fan Funding Messages */ 
+        yt-live-chat-paid-message-renderer { 
+            margin: 4px 0 !important; 
+        } 
+        
+        yt-live-chat-paid-message-renderer #author-name, 
+        yt-live-chat-paid-message-renderer #author-name *, 
+        yt-live-chat-membership-item-renderer #header-content-inner-column, 
+        yt-live-chat-membership-item-renderer #header-content-inner-column * { 
+            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
+            font-size: 20px !important; 
+            line-height: 22px !important; 
+        } 
+        
+        yt-live-chat-paid-message-renderer #purchase-amount, 
+        yt-live-chat-paid-message-renderer #purchase-amount *, 
+        yt-live-chat-membership-item-renderer #header-subtext, 
+        yt-live-chat-membership-item-renderer #header-subtext * { 
+            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
+            font-size: 18px !important; 
+            line-height: 20px !important; 
+        } 
+        
+        yt-live-chat-paid-message-renderer #content, 
+        yt-live-chat-paid-message-renderer #content * { 
+            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
+            font-size: 18px !important; 
+            line-height: 20px !important; 
+        } 
+        
+        yt-live-chat-membership-item-renderer #card, 
+        yt-live-chat-membership-item-renderer #header { 
+            background-color: #0f9d58 !important; 
+            margin: 4px 0 !important; 
+        } 
+        
+        yt-live-chat-ticker-renderer { 
+            display: none !important; 
+        } 
+        
+        /* SuperChat Ticker */ 
+        yt-live-chat-ticker-paid-message-item-renderer, 
+        yt-live-chat-ticker-paid-message-item-renderer *, 
+        yt-live-chat-ticker-sponsor-item-renderer, 
+        yt-live-chat-ticker-sponsor-item-renderer * { 
+            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
+        } 
+        
+        
+        
+        /* Animation */ 
+        @keyframes anim { 
+            0% { opacity: 0; translate: -16px; } 
+            100% { opacity: 1; translate: none; } 
+        } 
+        
+        yt-live-chat-item-list-renderer #items > * { 
+            animation: anim 200ms; 
+            animation-fill-mode: both; 
+        }
+
+        /* --------------------------
+           布局补丁 (修复 Flexbox 布局以匹配 CSS)
+           -------------------------- */
+        yt-live-chat-text-message-renderer {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 8px;
+            padding: 4px 24px;
+            position: relative;
+        }
+
+        #author-photo {
+            display: block;
+            margin-right: 16px;
+            overflow: hidden;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        
+        #content {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            align-items: flex-start;
+        }
+
+        yt-live-chat-author-chip {
+            display: inline-flex;
+            align-items: baseline;
+            margin-bottom: 2px;
+            vertical-align: baseline;
+        }
+    </style>
+</head>
+<body style="background: #333; overflow: hidden;">
+    <yt-live-chat-renderer>
+        <yt-live-chat-item-list-renderer>
+            <div id="items">
+                <!-- 动态消息将插入到这里 -->
+            </div>
+        </yt-live-chat-item-list-renderer>
+    </yt-live-chat-renderer>
+
+    <script>
+        const socket = io('http://localhost:18888', {
+            transports: ['websocket'],
+            reconnection: true
+        });
+
+        const itemsContainer = document.getElementById('items');
+        // 默认头像 (B站小电视或灰色头像)
+        const DEFAULT_FACE = 'https://i0.hdslb.com/bfs/face/member/noface.jpg';
+
+        function addElement(element) {
+            itemsContainer.appendChild(element);
+            window.scrollTo(0, document.body.scrollHeight);
+            // 限制消息数量
+            if (itemsContainer.children.length > 50) {
+                itemsContainer.removeChild(itemsContainer.children[0]);
+            }
+        }
+
+        // 辅助：生成头像 HTML
+        function createAvatar(url) {
+            const div = document.createElement('yt-img-shadow');
+            div.id = 'author-photo';
+            div.className = 'no-transition style-scope yt-live-chat-text-message-renderer';
+            div.setAttribute('height', '24');
+            div.setAttribute('width', '24');
+            
+            const img = document.createElement('img');
+            img.id = 'img';
+            img.className = 'style-scope yt-img-shadow';
+            // 默认头像
+            const validUrl = (url && url.startsWith('http')) ? url : DEFAULT_FACE;
+            img.src = validUrl;
+            img.width = 24;
+            img.height = 24;
+            
+            // 只有当 URL 不是默认头像时才监听错误
+            if (validUrl !== DEFAULT_FACE) {
+                img.onerror = () => { 
+                    // 防止死循环：只有当当前 src 不是默认头像时才重置
+                    if (img.src !== DEFAULT_FACE) {
+                        img.src = DEFAULT_FACE; 
+                    }
+                };
+            }
+            
+            div.appendChild(img);
+            return div;
+        }
+
+        // 辅助：生成作者名 HTML
+        function createAuthorChip(uname, type = '') {
+            const chip = document.createElement('yt-live-chat-author-chip');
+            chip.className = 'style-scope yt-live-chat-text-message-renderer';
+            
+            const name = document.createElement('span');
+            name.id = 'author-name';
+            name.className = 'style-scope yt-live-chat-author-chip';
+            name.dir = 'auto';
+            name.innerText = uname;
+            if (type) name.setAttribute('type', type);
+            
+            const chipBadges = document.createElement('span');
+            chipBadges.id = 'chip-badges';
+            chipBadges.className = 'style-scope yt-live-chat-author-chip';
+            name.appendChild(chipBadges);
+            
+            const chatBadges = document.createElement('span');
+            chatBadges.id = 'chat-badges';
+            chatBadges.className = 'style-scope yt-live-chat-author-chip';
+            
+            chip.appendChild(name);
+            chip.appendChild(chatBadges);
+            return chip;
+        }
+
+        socket.on('danmu-message', (msg) => {
+            console.log('MSG:', msg);
+
+            // 1. 普通弹幕
+            if (msg.cmd === 'DANMU_MSG') {
+                const info = msg.info;
+                const uname = info[2][1];
+                const content = info[1];
+                const isGuard = info[7] > 0;
+                const isAdmin = info[2][2] === 1;
+                
+                // 尝试获取注入的 face，如果没有则用默认
+                // 后端逻辑：第一次发弹幕可能没有 face（正在取），第二次就会有了
+                const face = msg.face || DEFAULT_FACE;
+                
+                const el = document.createElement('yt-live-chat-text-message-renderer');
+                el.className = 'style-scope yt-live-chat-item-list-renderer';
+                if (isAdmin) el.setAttribute('author-type', 'moderator');
+                else if (isGuard) el.setAttribute('author-type', 'member');
+                
+                el.appendChild(createAvatar(face));
+
+                const contentDiv = document.createElement('div');
+                contentDiv.id = 'content';
+                contentDiv.className = 'style-scope yt-live-chat-text-message-renderer';
+                
+                contentDiv.appendChild(createAuthorChip(uname, isAdmin ? 'moderator' : (isGuard ? 'member' : '')));
+                
+                const messageSpan = document.createElement('span');
+                messageSpan.id = 'message';
+                messageSpan.className = 'style-scope yt-live-chat-text-message-renderer';
+                messageSpan.innerText = content;
+                contentDiv.appendChild(messageSpan);
+
+                el.appendChild(contentDiv);
+                addElement(el);
+            }
+
+            // 2. 舰长 (USER_TOAST_MSG)
+            else if (msg.cmd === 'USER_TOAST_MSG') {
+                const data = msg.data;
+                // 舰长消息通常包含 face
+                
+                const el = document.createElement('yt-live-chat-membership-item-renderer');
+                el.className = 'style-scope yt-live-chat-item-list-renderer';
+                
+                const card = document.createElement('div');
+                card.id = 'card';
+                card.className = 'style-scope yt-live-chat-membership-item-renderer';
+                
+                const header = document.createElement('div');
+                header.id = 'header';
+                header.className = 'style-scope yt-live-chat-membership-item-renderer';
+                
+                // 使用数据中的头像
+                const avatarUrl = data.face || data.user_info?.face;
+                header.appendChild(createAvatar(avatarUrl));
+                
+                const headerContent = document.createElement('div');
+                headerContent.id = 'header-content';
+                headerContent.className = 'style-scope yt-live-chat-membership-item-renderer';
+                
+                const authorName = document.createElement('div');
+                authorName.id = 'header-content-inner-column';
+                authorName.className = 'style-scope yt-live-chat-membership-item-renderer';
+                authorName.innerText = data.username;
+                
+                const subtext = document.createElement('div');
+                subtext.id = 'header-subtext';
+                subtext.className = 'style-scope yt-live-chat-membership-item-renderer';
+                const guardName = data.guard_level === 1 ? '总督' : (data.guard_level === 2 ? '提督' : '舰长');
+                subtext.innerText = `开通了 ${guardName} x${data.num}${data.unit}`;
+                
+                headerContent.appendChild(authorName);
+                headerContent.appendChild(subtext);
+                header.appendChild(headerContent);
+                
+                card.appendChild(header);
+                el.appendChild(card);
+                addElement(el);
+            }
+
+            // 3. SuperChat (SUPER_CHAT_MESSAGE)
+            else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
+                const data = msg.data;
+                const el = document.createElement('yt-live-chat-paid-message-renderer');
+                el.className = 'style-scope yt-live-chat-item-list-renderer';
+                
+                // 设置 SC 颜色
+                const price = data.price;
+                if (price >= 2000) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#d00000');
+                else if (price >= 1000) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#e62117');
+                else if (price >= 500) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#e62117');
+                else if (price >= 100) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#ffb300');
+                else el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#1565c0');
+                
+                const card = document.createElement('div');
+                card.id = 'card';
+                card.className = 'style-scope yt-live-chat-paid-message-renderer';
+                
+                const header = document.createElement('div');
+                header.id = 'header';
+                header.className = 'style-scope yt-live-chat-paid-message-renderer';
+                header.style.backgroundColor = 'var(--yt-live-chat-paid-message-primary-color)';
+                
+                // 使用数据中的头像
+                const avatarUrl = data.user_info?.face || data.face;
+                header.appendChild(createAvatar(avatarUrl));
+                
+                const headerContent = document.createElement('div');
+                headerContent.id = 'header-content';
+                headerContent.className = 'style-scope yt-live-chat-paid-message-renderer';
+                const primaryCol = document.createElement('div');
+                primaryCol.id = 'header-content-primary-column';
+                primaryCol.className = 'style-scope yt-live-chat-paid-message-renderer';
+                
+                const name = document.createElement('div');
+                name.id = 'author-name';
+                name.className = 'style-scope yt-live-chat-paid-message-renderer';
+                name.innerText = data.user_info?.uname || '未知用户';
+                
+                const amount = document.createElement('div');
+                amount.id = 'purchase-amount';
+                amount.className = 'style-scope yt-live-chat-paid-message-renderer';
+                amount.innerText = `￥${price}`;
+                
+                primaryCol.appendChild(name);
+                primaryCol.appendChild(amount);
+                headerContent.appendChild(primaryCol);
+                header.appendChild(headerContent);
+                
+                const body = document.createElement('div');
+                body.id = 'body';
+                body.className = 'style-scope yt-live-chat-paid-message-renderer';
+                body.style.backgroundColor = 'var(--yt-live-chat-paid-message-secondary-color, #1565c0)'; 
+                
+                const message = document.createElement('div');
+                message.id = 'message';
+                message.className = 'style-scope yt-live-chat-paid-message-renderer';
+                message.innerText = data.message;
+                
+                body.appendChild(message);
+                
+                card.appendChild(header);
+                card.appendChild(body);
+                el.appendChild(card);
+                addElement(el);
+            }
+        });
+    </script>
+</body>
+</html>

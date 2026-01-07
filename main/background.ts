@@ -4,6 +4,9 @@ import serve from 'electron-serve'
 import { createWindow } from './helpers'
 import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo, BiliCookies, GetUserInfo, GetBiliUserInfo, GetRoomInfo, GetSilentUserList, AddSilentUser } from './lib/bilibili_login'
 import { BiliWebSocket, WsInfo, PackResult } from './lib/bilibili_socket'
+import { initOverlayServer, broadcastToOverlay, closeOverlayServer } from './lib/overlay_server'
+import fs from 'fs-extra'
+import { LRUCache } from 'lru-cache'
 
 const isProd = process.env.NODE_ENV === 'production'
 let activeBiliSocket: BiliWebSocket | null = null
@@ -11,14 +14,152 @@ let messageBuffer: any[] = []
 let messageTimer: NodeJS.Timeout | null = null
 let activeCookies: BiliCookies = {} // Store cookies globally in main process
 
-if (isProd) {
-  serve({ directory: 'app' })
-} else {
-  app.setPath('userData', `${app.getPath('userData')} (development)`)
+// Face Cache Configuration
+const FACE_CACHE_FILE = path.join(app.getPath('userData'), 'face_cache.json')
+// 使用 LRU Cache 替代 Map
+const faceCache = new LRUCache<number, string>({
+  max: 30000, // 最大 30000 条记录
+  // ttl: 0, // 0 或不设置表示永不过期（除非数量超过 max）
+  updateAgeOnGet: true, // 每次访问都更新“最近使用时间”，保证活跃用户不被淘汰
+})
+
+let pendingFaceRequests: Set<number> = new Set()
+let isCacheDirty = false
+// 使用两个队列实现优先级
+const highPriorityFaceQueue: number[] = []
+const lowPriorityFaceQueue: number[] = []
+let isQueueProcessing = false
+
+// Process queue worker
+async function processFaceQueue() {
+  if (isQueueProcessing || (highPriorityFaceQueue.length === 0 && lowPriorityFaceQueue.length === 0)) return
+
+  isQueueProcessing = true
+  
+  // 只要任意队列有数据就继续循环
+  while (highPriorityFaceQueue.length > 0 || lowPriorityFaceQueue.length > 0) {
+    // 优先从高优先级队列取，如果空的再从低优先级取
+    let uid: number | undefined
+    if (highPriorityFaceQueue.length > 0) {
+        uid = highPriorityFaceQueue.shift()
+    } else {
+        uid = lowPriorityFaceQueue.shift()
+    }
+
+    if (!uid) continue
+    
+    // Check cache again in case it was added recently
+    if (faceCache.has(uid)) {
+        pendingFaceRequests.delete(uid)
+        continue
+    }
+
+    try {
+      // Fetch with delay to avoid rate limit
+      const userInfo = await GetBiliUserInfo(activeCookies, uid)
+      if (userInfo && userInfo.face) {
+        faceCache.set(uid, userInfo.face)
+        isCacheDirty = true
+      }
+    } catch (err: any) {
+       // Log error but continue
+       // Decode potential garbled error message if possible, or just log raw
+       // "风控校验失败" usually means rate limit or captcha required
+       console.error(`[FaceCache] Failed for ${uid}:`, err.message || err)
+    } finally {
+      pendingFaceRequests.delete(uid)
+    }
+
+    // Wait 2000ms between requests to be safe
+    await new Promise(resolve => setTimeout(resolve, 2000))
+  }
+
+  isQueueProcessing = false
 }
 
-;(async () => {
-  await app.whenReady()
+// Load cache from disk
+try {
+  if (fs.existsSync(FACE_CACHE_FILE)) {
+    const data = fs.readJsonSync(FACE_CACHE_FILE)
+    if (data && typeof data === 'object') {
+      // Convert object to LRUCache load
+      // LRUCache v7+ 使用 load() 方法，或者直接 set
+      // 为了兼容性，我们遍历 set
+      Object.keys(data).forEach(key => {
+        faceCache.set(Number(key), data[key])
+      })
+      console.log(`[FaceCache] Loaded ${faceCache.size} entries from disk`)
+    }
+  }
+} catch (e) {
+  console.error('[FaceCache] Failed to load cache:', e)
+}
+
+// Save cache to disk periodically (every 30 seconds if dirty)
+setInterval(async () => {
+  if (isCacheDirty) {
+    try {
+      // Convert LRU to object for JSON storage
+      // dump() 方法返回 [key, value] 数组，或者是序列化后的对象
+      // 我们手动构建最简单的 key-value 对象以保持文件格式兼容
+      const obj: Record<string, string> = {}
+      
+      // LRUCache 的迭代器默认是按最近使用顺序的
+      // 我们不需要关心顺序，存进去就行
+      for (const [key, value] of faceCache.entries()) {
+          obj[key] = value
+      }
+      
+      // 使用异步写入防止阻塞 Main Process
+      await fs.writeJson(FACE_CACHE_FILE, obj)
+      isCacheDirty = false
+      // console.log('[FaceCache] Saved to disk')
+    } catch (e) {
+      console.error('[FaceCache] Failed to save cache:', e)
+    }
+  }
+}, 30000)
+
+/**
+ * Try to get user face from cache, or fetch it asynchronously.
+ * Returns null if not in cache immediately.
+ * @param uid User ID
+ * @param priority High priority for Gift/SC/Guard
+ */
+async function resolveUserFace(uid: number, priority: 'high' | 'low' = 'low'): Promise<string | null> {
+  if (!uid) return null
+  
+  // 1. Check Memory Cache
+  if (faceCache.has(uid)) {
+    return faceCache.get(uid) || null
+  }
+
+  // 2. If not in cache and not pending, add to queue
+  if (!pendingFaceRequests.has(uid)) {
+    pendingFaceRequests.add(uid)
+    if (priority === 'high') {
+        highPriorityFaceQueue.push(uid)
+        console.log(`[FaceCache] Added ${uid} to HIGH priority queue`)
+    } else {
+        lowPriorityFaceQueue.push(uid)
+    }
+    processFaceQueue() // Trigger worker
+  }
+
+  return null
+}
+
+if (isProd) {
+    serve({ directory: 'app' })
+  } else {
+    app.setPath('userData', `${app.getPath('userData')} (development)`)
+  }
+
+  // Start Overlay Server
+  initOverlayServer()
+
+  ;(async () => {
+    await app.whenReady()
 
   const mainWindow = createWindow('main', {
     width: 1000,
@@ -61,6 +202,7 @@ if (isProd) {
                 ]
              }
              mainWindow.webContents.send('danmu-message', mockMsg)
+             broadcastToOverlay('danmu-message', mockMsg)
           }
         },
         {
@@ -125,6 +267,7 @@ if (isProd) {
                 roomid: 123
             }
             mainWindow.webContents.send('danmu-message', mockSC)
+            broadcastToOverlay('danmu-message', mockSC)
           }
         },
         {
@@ -200,6 +343,7 @@ if (isProd) {
                 }
             }
             mainWindow.webContents.send('danmu-message', mockGift)
+            broadcastToOverlay('danmu-message', mockGift)
           }
         },
         { type: 'separator' },
@@ -269,15 +413,41 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
        // Filter for DANMU_MSG or other interest
        packet.body.forEach(async msg => {
           // console.log('Forwarding MSG:', msg.cmd) // Debug
-          if (msg.cmd === 'DANMU_MSG' || 
-              msg.cmd === 'INTERACT_WORD' || 
+          if (msg.cmd === 'DANMU_MSG') {
+             // Inject Face from Cache
+             const uid = msg.info[2][0]
+             // 普通弹幕：低优先级
+             const cachedFace = await resolveUserFace(uid, 'low')
+             if (cachedFace) {
+                 ;(msg as any).face = cachedFace
+             }
+             
+             messageBuffer.push(msg)
+             broadcastToOverlay('danmu-message', msg)
+
+          } else if (msg.cmd === 'INTERACT_WORD' || 
               msg.cmd === 'INTERACT_WORD_V2' || 
               msg.cmd === 'ENTRY_EFFECT' || 
               msg.cmd === 'SEND_GIFT' || 
               msg.cmd === 'SUPER_CHAT_MESSAGE' || 
               msg.cmd === 'ONLINE_RANK_COUNT') {
             
+            // For other messages, also try to inject face if uid is available
+            let uid = 0
+            if (msg.data && msg.data.uid) uid = msg.data.uid
+            
+            if (uid) {
+                // 礼物、SC、进场等：高优先级
+                const cachedFace = await resolveUserFace(uid, 'high')
+                if (cachedFace) {
+                    if (!msg.data) msg.data = {}
+                    msg.data.face = cachedFace
+                }
+            }
+
             messageBuffer.push(msg)
+            // Broadcast to Overlay Server (OBS)
+            broadcastToOverlay('danmu-message', msg)
 
           } else if (msg.cmd === 'USER_TOAST_MSG') {
              // Fetch user info for Guard message to get avatar
@@ -285,15 +455,25 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
                 // Use stored activeCookies
                 const uid = msg.data.uid
                 if (uid) {
-                    const userInfo = await GetBiliUserInfo(activeCookies, uid)
-                    if (userInfo && userInfo.face) {
-                        msg.data.face = userInfo.face
+                    // Try Cache First
+                    if (faceCache.has(uid)) {
+                        const cachedFace = faceCache.get(uid)
+                        if (cachedFace) msg.data.face = cachedFace
+                    } else {
+                        const userInfo = await GetBiliUserInfo(activeCookies, uid)
+                        if (userInfo && userInfo.face) {
+                            msg.data.face = userInfo.face
+                            faceCache.set(uid, userInfo.face)
+                            isCacheDirty = true
+                        }
                     }
                 }
              } catch (e) {
                 console.error('Failed to fetch guard user info', e)
              }
              messageBuffer.push(msg)
+             // Broadcast to Overlay Server (OBS)
+             broadcastToOverlay('danmu-message', msg)
           } else if (msg.cmd === 'STOP_LIVE_ROOM_LIST') {
              // System message, ignore in production
              // console.log('Ignored system msg:', msg.cmd)
@@ -530,6 +710,31 @@ ipcMain.handle('bilibili-get-room-info', async (event, roomId: number) => {
   } catch (error: any) {
     console.error('Failed to get room info:', error)
     return { success: false, error: error.message || error }
+  }
+})
+
+ipcMain.handle('fetch-user-face', async (event, uid) => {
+  try {
+    // 1. Check Cache
+    if (faceCache.has(uid)) {
+      // console.log(`[FaceCache] Hit for ${uid}`)
+      return faceCache.get(uid)
+    }
+
+    // 2. Fetch directly (since this is user triggered, we want immediate result)
+    // But we should still be careful about rate limits if user clicks too fast.
+    // Let's use the queue? No, UI expects a Promise result.
+    // Let's do a direct fetch but update cache.
+    const userInfo = await GetBiliUserInfo(activeCookies, uid)
+    if (userInfo && userInfo.face) {
+      faceCache.set(uid, userInfo.face)
+      isCacheDirty = true
+      return userInfo.face
+    }
+    return null
+  } catch (e) {
+    console.error('Failed to fetch user face', e)
+    return null
   }
 })
 
