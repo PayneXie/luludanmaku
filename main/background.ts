@@ -1,5 +1,5 @@
 import path from 'path'
-import { app, ipcMain, Menu, BrowserWindow, shell } from 'electron'
+import { app, ipcMain, Menu, BrowserWindow, shell, clipboard } from 'electron'
 import serve from 'electron-serve'
 import { createWindow } from './helpers'
 import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo, BiliCookies, GetUserInfo, GetBiliUserInfo, GetRoomInfo, GetSilentUserList, AddSilentUser } from './lib/bilibili_login'
@@ -701,6 +701,11 @@ ipcMain.on('window-set-always-on-top', (event, flag) => {
 
 ipcMain.on('open-external', (event, url) => {
     shell.openExternal(url)
+})
+
+ipcMain.on('clipboard-write', (event, text) => {
+    console.log('[Main] Clipboard Write:', text)
+    clipboard.writeText(text)
 })
 
 ipcMain.handle('bilibili-get-room-info', async (event, roomId: number) => {

@@ -2,194 +2,10 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Bilibili Overlay</title>
-    <!-- 解决B站图片403 Forbidden问题 -->
+    <title>CSS Injection Test (Live)</title>
     <meta name="referrer" content="no-referrer">
-    <!-- Socket.io CDN -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        /* 基础重置 */
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: transparent;
-        }
-
-        /* 模拟 YouTube 直播聊天的容器结构，以便兼容 CSS */
-        yt-live-chat-renderer {
-            display: block;
-            height: 100%;
-            width: 100%;
-            background-color: transparent;
-        }
-
-        yt-live-chat-item-list-renderer {
-            display: block;
-            height: 100%;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end; /* 消息底部对齐 */
-        }
-
-        #items {
-            display: flex;
-            flex-direction: column;
-            padding: 8px;
-            overflow: hidden;
-        }
-
-        /* -----------------------------------------------------
-           组件样式定义 (模拟 YouTube 结构)
-           ----------------------------------------------------- */
-        
-        /* 1. 普通弹幕 (模拟 yt-live-chat-text-message-renderer) */
-        yt-live-chat-text-message-renderer {
-            /* 关键修复：恢复 flex 布局，这是 YouTube 默认布局的基础 */
-            display: flex;
-            align-items: flex-start;
-            margin-bottom: 8px; /* 增加消息间距 */
-            padding: 4px 24px;  /* 增加左右内边距 */
-            position: relative;
-            font-size: 16px;
-        }
-
-        #author-photo {
-            display: block; /* 恢复为 block，因为是 flex item */
-            margin-right: 16px; /* 增加头像和内容的间距 */
-            overflow: hidden;
-            border-radius: 50%;
-            flex-shrink: 0; /* 防止头像被压缩 */
-        }
-        
-        #author-photo img {
-            display: block;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            border-radius: 50%; /* 确保图片本身也是圆的 */
-        }
-
-        #content {
-            display: flex; /* 关键：内容区域改为 flex column，让名字和消息换行 */
-            flex-direction: column;
-            min-width: 0; /* 防止 flex item 溢出 */
-            align-items: flex-start; /* 左对齐 */
-        }
-
-        /* 时间戳 (默认隐藏，CSS 控制) */
-        #timestamp {
-            display: none;
-            /* ...保留原有属性 */
-        }
-
-        yt-live-chat-author-chip {
-            display: inline-flex;
-            align-items: baseline;
-            margin-bottom: 2px; /* 名字和消息之间的微小间距 */
-            vertical-align: baseline;
-        }
-
-        #author-name {
-            font-weight: 500;
-            color: var(--yt-live-chat-secondary-text-color, #111);
-            /* 去掉可能导致颜色不对的透明背景设置，如果之前有的话 */
-        }
-
-        #message {
-            color: var(--yt-live-chat-primary-text-color, #000);
-            word-wrap: break-word;
-            word-break: break-word;
-            line-height: 1.4; /* 稍微增加行高 */
-            display: inline-block; /* 确保它是个块，或者根据 flex 布局自动调整 */
-        }
-
-        /* 2. SuperChat (模拟 yt-live-chat-paid-message-renderer) */
-        yt-live-chat-paid-message-renderer {
-            display: flex;
-            flex-direction: column;
-            border-radius: 4px;
-            margin: 4px 24px;
-            overflow: hidden;
-            position: relative;
-            box-shadow: 0 2px 2px 0 rgba(0,0,0,0.14), 0 1px 5px 0 rgba(0,0,0,0.12), 0 3px 1px -2px rgba(0,0,0,0.2);
-        }
-
-        #card {
-            display: flex;
-            flex-direction: column;
-        }
-
-        #header {
-            display: flex;
-            align-items: center;
-            padding: 8px 16px;
-            color: rgba(0,0,0,0.87);
-        }
-
-        #header-content {
-            display: flex;
-            flex-direction: column;
-            margin-left: 0; /* 头像在 header 里处理 */
-            flex: 1;
-        }
-
-        #header-content-primary-column {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-        }
-
-        #purchase-amount {
-            font-weight: 500;
-        }
-
-        #body {
-            padding: 8px 16px;
-            color: rgba(0,0,0,0.87);
-        }
-
-        /* 3. 礼物/舰长 (模拟 yt-live-chat-membership-item-renderer) */
-        yt-live-chat-membership-item-renderer {
-            display: block;
-            margin: 4px 24px;
-        }
-
-        yt-live-chat-membership-item-renderer #card {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            padding: 4px 8px;
-            border-radius: 4px;
-            color: rgba(0,0,0,0.87);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        
-        yt-live-chat-membership-item-renderer #header {
-            background-color: transparent !important; /* Reset, let CSS handle bg */
-            padding: 0;
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            width: 100%;
-        }
-
-        yt-live-chat-membership-item-renderer #header-content {
-             display: flex;
-             flex-direction: column;
-             margin-left: 16px;
-        }
-
-        /* 默认隐藏的元素，供 CSS 选择器使用 */
-        yt-live-chat-header-renderer,
-        yt-live-chat-message-input-renderer,
-        yt-live-chat-ticker-renderer {
-            display: none;
-        }
-
         /* 注入用户提供的 CSS (基础变量) */
         html:not(.style-scope) {
             --yt-live-chat-background-color: #fff;
@@ -270,9 +86,12 @@
             --yt-pdg-paid-stickers-tab-selection-bar-color: #065fd4;
             --yt-pdg-paid-stickers-author-name-font-size: 13px;
             --yt-pdg-paid-stickers-margin-left: 38px;
+            --layout-flex_-_flex: 1;
         }
-        
-        /* 注入用户提供的 CSS (自定义外观) */
+
+        /* --------------------------
+           注入用户提供的自定义 CSS
+           -------------------------- */
         @import url("https://fonts.googleapis.com/css?family=Noto%20Sans%20SC");
  
         /* Transparent background */ 
@@ -335,8 +154,6 @@
         /* Avatars */ 
         yt-live-chat-text-message-renderer #author-photo, 
         yt-live-chat-text-message-renderer #author-photo img, 
-        yt-live-chat-paid-message-renderer #author-photo, 
-        yt-live-chat-paid-message-renderer #author-photo img, 
         yt-live-chat-membership-item-renderer #author-photo, 
         yt-live-chat-membership-item-renderer #author-photo img { 
             
@@ -404,11 +221,16 @@
         
         yt-live-chat-text-message-renderer #message .emoji { 
             width: auto !important; 
-            height: 18px !important; 
+            height: 24px !important; 
+            vertical-align: text-bottom;
         } 
         
-        yt-live-chat-text-message-renderer #message .emoji.blc-large-emoji { 
-            height: 36px !important; 
+        yt-live-chat-text-message-renderer #message .emoji.blc-large-emoji,
+        yt-live-chat-text-message-renderer #message .emoji.bili-sticker { 
+            height: auto !important;
+            max-height: 80px !important;
+            min-height: 40px !important;
+            vertical-align: middle;
         } 
         
         /* The triangle beside dialog */ 
@@ -480,41 +302,166 @@
             
         } 
         
-        /* SuperChat/Fan Funding Messages */ 
-        yt-live-chat-paid-message-renderer { 
-            margin: 4px 0 !important; 
-        } 
+        /* =========================================
+           SuperChat / Paid Messages Optimization
+           ========================================= */
+        yt-live-chat-paid-message-renderer {
+            margin: 8px 0 !important;
+            display: block;
+            position: relative;
+        }
+
+        yt-live-chat-paid-message-renderer #card {
+            display: flex;
+            flex-direction: column;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            overflow: hidden;
+            font-family: "Noto Sans SC", sans-serif;
+        }
+
+        /* Header */
+        yt-live-chat-paid-message-renderer #header {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: var(--yt-live-chat-paid-message-primary-color, #1565c0);
+            color: #ffffff;
+            min-height: 48px;
+        }
+
+        /* Avatar in Header */
+        yt-live-chat-paid-message-renderer #header #author-photo {
+            width: 40px !important;
+            height: 40px !important;
+            border-radius: 50%;
+            margin-right: 12px !important;
+            overflow: hidden;
+            flex-shrink: 0;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
         
-        yt-live-chat-paid-message-renderer #author-name, 
-        yt-live-chat-paid-message-renderer #author-name *, 
-        yt-live-chat-membership-item-renderer #header-content-inner-column, 
-        yt-live-chat-membership-item-renderer #header-content-inner-column * { 
-            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
-            font-size: 20px !important; 
-            line-height: 22px !important; 
-        } 
-        
-        yt-live-chat-paid-message-renderer #purchase-amount, 
-        yt-live-chat-paid-message-renderer #purchase-amount *, 
-        yt-live-chat-membership-item-renderer #header-subtext, 
-        yt-live-chat-membership-item-renderer #header-subtext * { 
-            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
-            font-size: 18px !important; 
-            line-height: 20px !important; 
-        } 
-        
-        yt-live-chat-paid-message-renderer #content, 
-        yt-live-chat-paid-message-renderer #content * { 
-            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
-            font-size: 18px !important; 
-            line-height: 20px !important; 
-        } 
-        
-        yt-live-chat-membership-item-renderer #card, 
-        yt-live-chat-membership-item-renderer #header { 
-            background-color: #0f9d58 !important; 
-            margin: 4px 0 !important; 
-        } 
+        yt-live-chat-paid-message-renderer #header #author-photo img {
+             width: 100%;
+             height: 100%;
+             object-fit: cover;
+        }
+
+        /* Content in Header */
+        yt-live-chat-paid-message-renderer #header-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        yt-live-chat-paid-message-renderer #header-content-primary-column {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        yt-live-chat-paid-message-renderer #author-name {
+            font-size: 16px !important;
+            font-weight: 700;
+            color: #ffffff !important;
+            line-height: 1.2 !important;
+            opacity: 1;
+        }
+
+        yt-live-chat-paid-message-renderer #purchase-amount {
+            font-size: 14px !important;
+            font-weight: 500;
+            color: #ffffff !important;
+            line-height: 1.2 !important;
+            margin-top: 2px;
+            opacity: 0.9;
+        }
+
+        /* Body */
+        yt-live-chat-paid-message-renderer #body {
+            padding: 10px 12px;
+            background-color: var(--yt-live-chat-paid-message-secondary-color, #0d47a1);
+            color: #ffffff;
+        }
+
+        yt-live-chat-paid-message-renderer #message {
+            font-size: 15px !important;
+            line-height: 1.4 !important;
+            color: #ffffff !important;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+
+        /* =========================================
+           Membership / Guard Optimization
+           ========================================= */
+        yt-live-chat-membership-item-renderer {
+            margin: 8px 0 !important;
+            display: block;
+            position: relative;
+        }
+
+        yt-live-chat-membership-item-renderer #card {
+            display: flex;
+            flex-direction: column;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            overflow: hidden;
+            font-family: "Noto Sans SC", sans-serif;
+            background-color: #0f9d58 !important; /* Green for membership */
+        }
+
+        yt-live-chat-membership-item-renderer #header {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: transparent !important; /* Color handled by card */
+            color: #ffffff;
+            min-height: 48px;
+        }
+
+        yt-live-chat-membership-item-renderer #header #author-photo {
+            width: 40px !important;
+            height: 40px !important;
+            border-radius: 50%;
+            margin-right: 12px !important;
+            overflow: hidden;
+            flex-shrink: 0;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        yt-live-chat-membership-item-renderer #header #author-photo img {
+             width: 100%;
+             height: 100%;
+             object-fit: cover;
+        }
+
+        yt-live-chat-membership-item-renderer #header-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        yt-live-chat-membership-item-renderer #header-content-inner-column {
+            font-size: 16px !important;
+            font-weight: 700;
+            color: #ffffff !important;
+            line-height: 1.2 !important;
+            margin-bottom: 2px;
+        }
+
+        yt-live-chat-membership-item-renderer #header-subtext {
+            font-size: 14px !important;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9) !important;
+            line-height: 1.2 !important;
+        }
         
         yt-live-chat-ticker-renderer { 
             display: none !important; 
@@ -532,21 +479,91 @@
         
         /* Animation */ 
         @keyframes anim { 
-            0% { opacity: 0; transform: translateX(-16px); } 
-            100% { opacity: 1; transform: none; } 
+            0% { opacity: 0; translate: -16px; } 
+            100% { opacity: 1; translate: none; } 
         } 
         
         yt-live-chat-item-list-renderer #items > * { 
             animation: anim 200ms; 
             animation-fill-mode: both; 
         }
+
+        /* --------------------------
+           布局补丁 (修复 Flexbox 布局以匹配 CSS)
+           -------------------------- */
+        yt-live-chat-text-message-renderer {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 8px;
+            padding: 4px 24px;
+            position: relative;
+        }
+
+        #author-photo {
+            display: block;
+            margin-right: 16px;
+            overflow: hidden;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        
+        #content {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            align-items: flex-start;
+        }
+
+        yt-live-chat-author-chip {
+            display: inline-flex;
+            align-items: baseline;
+            margin-bottom: 2px;
+            vertical-align: baseline;
+        }
+
+        /* Gift Style */
+        .gift-card {
+            display: flex;
+            align-items: center;
+            background: linear-gradient(90deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+            border-radius: 24px;
+            padding: 8px 16px;
+            margin: 8px 0;
+            color: #d6336c;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .gift-card img {
+            width: 40px;
+            height: 40px;
+            margin-right: 12px;
+            border-radius: 50%;
+        }
+
+        /* Interact/Entry Style */
+        .interact-message {
+            margin: 4px 24px;
+            padding: 4px 12px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 12px;
+            color: #666;
+            font-size: 14px;
+            font-family: "Noto Sans SC", sans-serif;
+            display: inline-block;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .interact-message .uname {
+            color: #00a1d6;
+            font-weight: bold;
+            margin-right: 4px;
+        }
     </style>
 </head>
-<body>
+<body style="background: transparent; overflow: hidden;">
     <yt-live-chat-renderer>
         <yt-live-chat-item-list-renderer>
             <div id="items">
-                <!-- 消息将插入到这里 -->
+                <!-- 动态消息将插入到这里 -->
             </div>
         </yt-live-chat-item-list-renderer>
     </yt-live-chat-renderer>
@@ -558,49 +575,295 @@
         });
 
         const itemsContainer = document.getElementById('items');
+        const DEFAULT_FACE = 'https://i0.hdslb.com/bfs/face/member/noface.jpg';
+        
+        // 配置：是否显示进场/关注消息
+        const SHOW_INTERACT = true; 
+        
+        // 消息队列，用于批量处理
+        const messageQueue = [];
+        let isProcessing = false;
 
-        // 配置：最大消息数
-        const MAX_MESSAGES = 50;
-
-        function addElement(element) {
-            itemsContainer.appendChild(element);
-            // 自动滚动到底部
-            window.scrollTo(0, document.body.scrollHeight);
-            
-            // 移除旧消息
-            if (itemsContainer.children.length > MAX_MESSAGES) {
-                itemsContainer.removeChild(itemsContainer.children[0]);
+        // 批量处理消息的函数 (基于 requestAnimationFrame)
+        function processQueue() {
+            if (messageQueue.length === 0) {
+                isProcessing = false;
+                return;
             }
+
+            isProcessing = true;
+            
+            // 每帧最多处理 10 条，避免阻塞
+            const BATCH_SIZE = 10;
+            const batch = messageQueue.splice(0, BATCH_SIZE);
+            
+            const fragment = document.createDocumentFragment();
+            
+            batch.forEach(msg => {
+                const element = createMessageElement(msg);
+                if (element) {
+                    fragment.appendChild(element);
+                }
+            });
+
+            if (fragment.children.length > 0) {
+                itemsContainer.appendChild(fragment);
+                
+                // 批量清理旧消息
+                while (itemsContainer.children.length > 100) {
+                    itemsContainer.removeChild(itemsContainer.children[0]);
+                }
+                
+                // 滚动到底部
+                window.scrollTo(0, document.body.scrollHeight);
+            }
+
+            // 继续处理下一帧
+            requestAnimationFrame(processQueue);
+        }
+
+        // 将 socket 消息推入队列
+        socket.on('danmu-message', (msg) => {
+            messageQueue.push(msg);
+            if (!isProcessing) {
+                processQueue();
+            }
+        });
+
+        // 工厂函数：根据消息类型创建 DOM 元素
+        function createMessageElement(msg) {
+            try {
+                // 1. 普通弹幕 (DANMU_MSG)
+                if (msg.cmd === 'DANMU_MSG') {
+                    const info = msg.info;
+                    const uname = info[2][1];
+                    const content = info[1];
+                    const isGuard = info[7] > 0;
+                    const isAdmin = info[2][2] === 1;
+                    const face = msg.face || DEFAULT_FACE;
+                    
+                    // 检查是否包含图片表情 (info[0][13])
+                    // 结构: { url: "..." }
+                    const extraInfo = info[0][13];
+                    const isEmoji = extraInfo && extraInfo.url;
+                    
+                    const el = document.createElement('yt-live-chat-text-message-renderer');
+                    el.className = 'style-scope yt-live-chat-item-list-renderer';
+                    if (isAdmin) el.setAttribute('author-type', 'moderator');
+                    else if (isGuard) el.setAttribute('author-type', 'member');
+                    
+                    el.appendChild(createAvatar(face));
+
+                    const contentDiv = document.createElement('div');
+                    contentDiv.id = 'content';
+                    contentDiv.className = 'style-scope yt-live-chat-text-message-renderer';
+                    
+                    contentDiv.appendChild(createAuthorChip(uname, isAdmin ? 'moderator' : (isGuard ? 'member' : '')));
+                    
+                    const messageSpan = document.createElement('span');
+                    messageSpan.id = 'message';
+                    messageSpan.className = 'style-scope yt-live-chat-text-message-renderer';
+                    
+                    if (isEmoji) {
+                        const emojiImg = document.createElement('img');
+                        emojiImg.src = extraInfo.url;
+                        emojiImg.className = 'emoji bili-sticker style-scope yt-live-chat-text-message-renderer';
+                        // B站表情一般比较大，限制一下，但CSS中已经放宽了限制
+                        // emojiImg.style.height = '50px'; 
+                        // emojiImg.style.verticalAlign = 'middle';
+                        messageSpan.appendChild(emojiImg);
+                    } else {
+                        messageSpan.innerText = content;
+                    }
+                    
+                    contentDiv.appendChild(messageSpan);
+                    el.appendChild(contentDiv);
+                    return el;
+                }
+
+                // 2. 舰长 (USER_TOAST_MSG)
+                else if (msg.cmd === 'USER_TOAST_MSG') {
+                    const data = msg.data;
+                    const el = document.createElement('yt-live-chat-membership-item-renderer');
+                    el.className = 'style-scope yt-live-chat-item-list-renderer';
+                    
+                    const card = document.createElement('div');
+                    card.id = 'card';
+                    card.className = 'style-scope yt-live-chat-membership-item-renderer';
+                    
+                    const header = document.createElement('div');
+                    header.id = 'header';
+                    header.className = 'style-scope yt-live-chat-membership-item-renderer';
+                    
+                    const avatarUrl = data.face || data.user_info?.face;
+                    header.appendChild(createAvatar(avatarUrl));
+                    
+                    const headerContent = document.createElement('div');
+                    headerContent.id = 'header-content';
+                    headerContent.className = 'style-scope yt-live-chat-membership-item-renderer';
+                    
+                    const authorName = document.createElement('div');
+                    authorName.id = 'header-content-inner-column';
+                    authorName.className = 'style-scope yt-live-chat-membership-item-renderer';
+                    authorName.innerText = data.username;
+                    
+                    const subtext = document.createElement('div');
+                    subtext.id = 'header-subtext';
+                    subtext.className = 'style-scope yt-live-chat-membership-item-renderer';
+                    const guardName = data.guard_level === 1 ? '总督' : (data.guard_level === 2 ? '提督' : '舰长');
+                    subtext.innerText = `开通了 ${guardName} x${data.num}${data.unit}`;
+                    
+                    headerContent.appendChild(authorName);
+                    headerContent.appendChild(subtext);
+                    header.appendChild(headerContent);
+                    
+                    card.appendChild(header);
+                    el.appendChild(card);
+                    return el;
+                }
+
+                // 3. SuperChat (SUPER_CHAT_MESSAGE)
+                else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
+                    const data = msg.data;
+                    const el = document.createElement('yt-live-chat-paid-message-renderer');
+                    el.className = 'style-scope yt-live-chat-item-list-renderer';
+                    
+                    const price = data.price;
+                    let primaryColor = '#1565c0';
+                    let secondaryColor = '#0d47a1';
+
+                    if (price >= 2000) { primaryColor = '#d00000'; secondaryColor = '#b71c1c'; } 
+                    else if (price >= 1000) { primaryColor = '#e62117'; secondaryColor = '#c62828'; } 
+                    else if (price >= 500) { primaryColor = '#e91e63'; secondaryColor = '#c2185b'; } 
+                    else if (price >= 100) { primaryColor = '#ffb300'; secondaryColor = '#f57f17'; } 
+                    else if (price >= 30) { primaryColor = '#00b8d4'; secondaryColor = '#0091ea'; } 
+                    else { primaryColor = '#1565c0'; secondaryColor = '#0d47a1'; }
+                    
+                    el.style.setProperty('--yt-live-chat-paid-message-primary-color', primaryColor);
+                    el.style.setProperty('--yt-live-chat-paid-message-secondary-color', secondaryColor);
+                    
+                    const card = document.createElement('div');
+                    card.id = 'card';
+                    card.className = 'style-scope yt-live-chat-paid-message-renderer';
+                    
+                    const header = document.createElement('div');
+                    header.id = 'header';
+                    header.className = 'style-scope yt-live-chat-paid-message-renderer';
+                    
+                    const avatarUrl = data.user_info?.face || data.face;
+                    header.appendChild(createAvatar(avatarUrl));
+                    
+                    const headerContent = document.createElement('div');
+                    headerContent.id = 'header-content';
+                    headerContent.className = 'style-scope yt-live-chat-paid-message-renderer';
+                    const primaryCol = document.createElement('div');
+                    primaryCol.id = 'header-content-primary-column';
+                    primaryCol.className = 'style-scope yt-live-chat-paid-message-renderer';
+                    
+                    const name = document.createElement('div');
+                    name.id = 'author-name';
+                    name.className = 'style-scope yt-live-chat-paid-message-renderer';
+                    name.innerText = data.user_info?.uname || '未知用户';
+                    
+                    const amount = document.createElement('div');
+                    amount.id = 'purchase-amount';
+                    amount.className = 'style-scope yt-live-chat-paid-message-renderer';
+                    amount.innerText = `￥${price}`;
+                    
+                    primaryCol.appendChild(name);
+                    primaryCol.appendChild(amount);
+                    headerContent.appendChild(primaryCol);
+                    header.appendChild(headerContent);
+                    
+                    const body = document.createElement('div');
+                    body.id = 'body';
+                    body.className = 'style-scope yt-live-chat-paid-message-renderer';
+                    
+                    const message = document.createElement('div');
+                    message.id = 'message';
+                    message.className = 'style-scope yt-live-chat-paid-message-renderer';
+                    message.innerText = data.message;
+                    
+                    body.appendChild(message);
+                    card.appendChild(header);
+                    card.appendChild(body);
+                    el.appendChild(card);
+                    return el;
+                }
+
+                // 4. 礼物消息 (SEND_GIFT / COMBO_SEND)
+                else if (msg.cmd === 'SEND_GIFT' || msg.cmd === 'COMBO_SEND') {
+                    const data = msg.data;
+                    const uname = data.uname;
+                    const giftName = data.giftName;
+                    const num = data.num || data.batch_combo_num || 1;
+                    const face = data.face || data.user_info?.face || DEFAULT_FACE;
+                    
+                    const el = document.createElement('div');
+                    el.className = 'gift-card style-scope yt-live-chat-item-list-renderer';
+                    
+                    const img = document.createElement('img');
+                    img.src = face;
+                    img.onerror = () => { img.src = DEFAULT_FACE; };
+                    el.appendChild(img);
+                    
+                    const text = document.createElement('span');
+                    text.innerText = `${uname} 投喂了 ${giftName} x${num}`;
+                    el.appendChild(text);
+                    return el;
+                }
+                
+                // 5. 进场/关注消息 (INTERACT_WORD)
+                else if (msg.cmd === 'INTERACT_WORD' && SHOW_INTERACT) {
+                     const data = msg.data;
+                     const uname = data.uname;
+                     const msgType = data.msg_type; // 1: 进入, 2: 关注, 3: 分享
+                     
+                     // 只显示进入和关注
+                     let action = '';
+                     if (msgType === 1) action = '进入了直播间';
+                     else if (msgType === 2) action = '关注了直播间';
+                     else return null;
+
+                     const el = document.createElement('div');
+                     el.className = 'interact-message style-scope yt-live-chat-item-list-renderer';
+                     
+                     const nameSpan = document.createElement('span');
+                     nameSpan.className = 'uname';
+                     nameSpan.innerText = uname;
+                     
+                     el.appendChild(nameSpan);
+                     el.appendChild(document.createTextNode(action));
+                     return el;
+                }
+
+            } catch (e) {
+                console.error('Error creating element:', e);
+                return null;
+            }
+            return null;
         }
 
         // 辅助：生成头像 HTML
         function createAvatar(url) {
-            // 结构: <yt-img-shadow id="author-photo" class="style-scope yt-live-chat-text-message-renderer" ...><img id="img" class="style-scope yt-img-shadow" ...></yt-img-shadow>
             const div = document.createElement('yt-img-shadow');
             div.id = 'author-photo';
             div.className = 'no-transition style-scope yt-live-chat-text-message-renderer';
-            // 默认尺寸 24，但 CSS 会强制改为 40
-            div.setAttribute('height', '24'); 
+            div.setAttribute('height', '24');
             div.setAttribute('width', '24');
             
             const img = document.createElement('img');
             img.id = 'img';
             img.className = 'style-scope yt-img-shadow';
-            
-            // 默认头像
-            const DEFAULT_FACE = '//static.hdslb.com/images/member/noface.gif';
             const validUrl = (url && url.startsWith('http')) ? url : DEFAULT_FACE;
-            
             img.src = validUrl;
             img.width = 24;
             img.height = 24;
-            img.alt = '';
             
-            // 只有当 URL 不是默认头像时才监听错误，防止死循环闪烁
             if (validUrl !== DEFAULT_FACE) {
-                img.onerror = () => {
+                img.onerror = () => { 
                     if (img.src !== DEFAULT_FACE) {
-                        img.src = DEFAULT_FACE;
+                        img.src = DEFAULT_FACE; 
                     }
                 };
             }
@@ -612,192 +875,28 @@
         // 辅助：生成作者名 HTML
         function createAuthorChip(uname, type = '') {
             const chip = document.createElement('yt-live-chat-author-chip');
+            chip.className = 'style-scope yt-live-chat-text-message-renderer';
+            
             const name = document.createElement('span');
             name.id = 'author-name';
+            name.className = 'style-scope yt-live-chat-author-chip';
+            name.dir = 'auto';
             name.innerText = uname;
-            if (type) name.setAttribute('type', type); // owner, moderator, member
+            if (type) name.setAttribute('type', type);
+            
+            const chipBadges = document.createElement('span');
+            chipBadges.id = 'chip-badges';
+            chipBadges.className = 'style-scope yt-live-chat-author-chip';
+            name.appendChild(chipBadges);
+            
+            const chatBadges = document.createElement('span');
+            chatBadges.id = 'chat-badges';
+            chatBadges.className = 'style-scope yt-live-chat-author-chip';
+            
             chip.appendChild(name);
-            // 这里可以加徽章逻辑
+            chip.appendChild(chatBadges);
             return chip;
         }
-
-        socket.on('danmu-message', (msg) => {
-            console.log('MSG:', msg);
-
-            // 1. 普通弹幕 (DANMU_MSG)
-            if (msg.cmd === 'DANMU_MSG') {
-                const info = msg.info;
-                const uname = info[2][1];
-                const content = info[1];
-                const uid = info[2][0];
-                const isGuard = info[7] > 0;
-                const isAdmin = info[2][2] === 1;
-                
-                // 尝试获取注入的 face，如果没有则用默认
-                // 后端逻辑：第一次发弹幕可能没有 face（正在取），第二次就会有了
-                // 默认头像
-                const DEFAULT_FACE = '//static.hdslb.com/images/member/noface.gif';
-                const face = msg.face || DEFAULT_FACE; 
-
-                // <yt-live-chat-text-message-renderer class="style-scope yt-live-chat-item-list-renderer" ...>
-                const el = document.createElement('yt-live-chat-text-message-renderer');
-                el.className = 'style-scope yt-live-chat-item-list-renderer';
-                if (isAdmin) el.setAttribute('author-type', 'moderator');
-                else if (isGuard) el.setAttribute('author-type', 'member');
-                
-                // 1. 头像
-                el.appendChild(createAvatar(face));
-
-                // 2. 内容容器 <div id="content" class="style-scope yt-live-chat-text-message-renderer">
-                const contentDiv = document.createElement('div');
-                contentDiv.id = 'content';
-                contentDiv.className = 'style-scope yt-live-chat-text-message-renderer';
-                
-                contentDiv.appendChild(createAuthorChip(uname, isAdmin ? 'moderator' : (isGuard ? 'member' : '')));
-                
-                const messageSpan = document.createElement('span');
-                messageSpan.id = 'message';
-                messageSpan.innerText = content;
-                contentDiv.appendChild(messageSpan);
-
-                el.appendChild(contentDiv);
-                addElement(el);
-            }
-
-            // 2. 礼物 (SEND_GIFT)
-            else if (msg.cmd === 'SEND_GIFT') {
-                const data = msg.data;
-                // 筛选：比如只显示大于等于 1 元的礼物
-                // if (data.coin_type === 'gold' && data.total_coin < 1000) return; 
-
-                const el = document.createElement('yt-live-chat-membership-item-renderer');
-                
-                const card = document.createElement('div');
-                card.id = 'card';
-                
-                const header = document.createElement('div');
-                header.id = 'header';
-                
-                header.appendChild(createAvatar(data.face));
-                
-                const headerContent = document.createElement('div');
-                headerContent.id = 'header-content';
-                
-                const authorName = document.createElement('div');
-                authorName.id = 'header-content-inner-column';
-                authorName.innerText = data.uname;
-                
-                const subtext = document.createElement('div');
-                subtext.id = 'header-subtext';
-                subtext.innerText = `投喂 ${data.giftName} x${data.num}`;
-                
-                headerContent.appendChild(authorName);
-                headerContent.appendChild(subtext);
-                header.appendChild(headerContent);
-                
-                card.appendChild(header);
-                el.appendChild(card);
-                addElement(el);
-            }
-
-            // 3. 舰长 (USER_TOAST_MSG)
-            else if (msg.cmd === 'USER_TOAST_MSG') {
-                const data = msg.data;
-                const el = document.createElement('yt-live-chat-membership-item-renderer'); // 复用 Membership 样式
-                
-                const card = document.createElement('div');
-                card.id = 'card';
-                card.style.backgroundColor = '#00a1d6'; // 舰长蓝，会被 CSS 覆盖
-                
-                const header = document.createElement('div');
-                header.id = 'header';
-                
-                header.appendChild(createAvatar(data.face)); // 你的后端已经注入了 face
-                
-                const headerContent = document.createElement('div');
-                headerContent.id = 'header-content';
-                
-                const authorName = document.createElement('div');
-                authorName.id = 'header-content-inner-column';
-                authorName.innerText = data.username;
-                
-                const subtext = document.createElement('div');
-                subtext.id = 'header-subtext';
-                const guardName = data.guard_level === 1 ? '总督' : (data.guard_level === 2 ? '提督' : '舰长');
-                subtext.innerText = `开通了 ${guardName} x${data.num}${data.unit}`;
-                
-                headerContent.appendChild(authorName);
-                headerContent.appendChild(subtext);
-                header.appendChild(headerContent);
-                
-                card.appendChild(header);
-                el.appendChild(card);
-                addElement(el);
-            }
-
-            // 4. SuperChat (SUPER_CHAT_MESSAGE)
-            else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
-                const data = msg.data;
-                const el = document.createElement('yt-live-chat-paid-message-renderer');
-                
-                // 设置 SC 颜色等级 (模拟 YouTube 颜色逻辑)
-                const price = data.price;
-                let colorStyle = '';
-                // 简单分级
-                if (price >= 2000) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#d00000'); // Red
-                else if (price >= 1000) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#e62117'); // Magenta
-                else if (price >= 500) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#e62117'); // Orange
-                else if (price >= 100) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#ffb300'); // Yellow
-                else el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#1565c0'); // Blue
-                
-                // Header
-                const card = document.createElement('div');
-                card.id = 'card';
-                
-                const header = document.createElement('div');
-                header.id = 'header';
-                // header 颜色通常比 body 深一点，这里简化，CSS 可以统一处理
-                header.style.backgroundColor = 'var(--yt-live-chat-paid-message-primary-color)';
-                
-                header.appendChild(createAvatar(data.user_info.face));
-                
-                const headerContent = document.createElement('div');
-                headerContent.id = 'header-content';
-                const primaryCol = document.createElement('div');
-                primaryCol.id = 'header-content-primary-column';
-                
-                const name = document.createElement('div');
-                name.id = 'author-name';
-                name.innerText = data.user_info.uname;
-                
-                const amount = document.createElement('div');
-                amount.id = 'purchase-amount';
-                amount.innerText = `￥${price}`;
-                
-                primaryCol.appendChild(name);
-                primaryCol.appendChild(amount);
-                headerContent.appendChild(primaryCol);
-                header.appendChild(headerContent);
-                
-                // Body
-                const body = document.createElement('div');
-                body.id = 'body';
-                body.style.backgroundColor = 'var(--yt-live-chat-paid-message-secondary-color, #1565c0)'; // 简单 fallback
-                
-                const message = document.createElement('div');
-                message.id = 'message';
-                message.innerText = data.message;
-                
-                body.appendChild(message);
-                
-                card.appendChild(header);
-                card.appendChild(body);
-                el.appendChild(card);
-                addElement(el);
-            }
-        });
     </script>
-</body>
-</html>
 </body>
 </html>

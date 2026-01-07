@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>CSS Injection Test (Live)</title>
     <meta name="referrer" content="no-referrer">
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script> -->
     <style>
         /* 注入用户提供的 CSS (基础变量) */
         html:not(.style-scope) {
@@ -154,8 +154,6 @@
         /* Avatars */ 
         yt-live-chat-text-message-renderer #author-photo, 
         yt-live-chat-text-message-renderer #author-photo img, 
-        yt-live-chat-paid-message-renderer #author-photo, 
-        yt-live-chat-paid-message-renderer #author-photo img, 
         yt-live-chat-membership-item-renderer #author-photo, 
         yt-live-chat-membership-item-renderer #author-photo img { 
             
@@ -223,11 +221,16 @@
         
         yt-live-chat-text-message-renderer #message .emoji { 
             width: auto !important; 
-            height: 18px !important; 
+            height: 24px !important; 
+            vertical-align: text-bottom;
         } 
         
-        yt-live-chat-text-message-renderer #message .emoji.blc-large-emoji { 
-            height: 36px !important; 
+        yt-live-chat-text-message-renderer #message .emoji.blc-large-emoji,
+        yt-live-chat-text-message-renderer #message .emoji.bili-sticker { 
+            height: auto !important;
+            max-height: 80px !important;
+            min-height: 40px !important;
+            vertical-align: middle;
         } 
         
         /* The triangle beside dialog */ 
@@ -299,41 +302,166 @@
             
         } 
         
-        /* SuperChat/Fan Funding Messages */ 
-        yt-live-chat-paid-message-renderer { 
-            margin: 4px 0 !important; 
-        } 
+        /* =========================================
+           SuperChat / Paid Messages Optimization
+           ========================================= */
+        yt-live-chat-paid-message-renderer {
+            margin: 8px 0 !important;
+            display: block;
+            position: relative;
+        }
+
+        yt-live-chat-paid-message-renderer #card {
+            display: flex;
+            flex-direction: column;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            overflow: hidden;
+            font-family: "Noto Sans SC", sans-serif;
+        }
+
+        /* Header */
+        yt-live-chat-paid-message-renderer #header {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: var(--yt-live-chat-paid-message-primary-color, #1565c0);
+            color: #ffffff;
+            min-height: 48px;
+        }
+
+        /* Avatar in Header */
+        yt-live-chat-paid-message-renderer #header #author-photo {
+            width: 40px !important;
+            height: 40px !important;
+            border-radius: 50%;
+            margin-right: 12px !important;
+            overflow: hidden;
+            flex-shrink: 0;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
         
-        yt-live-chat-paid-message-renderer #author-name, 
-        yt-live-chat-paid-message-renderer #author-name *, 
-        yt-live-chat-membership-item-renderer #header-content-inner-column, 
-        yt-live-chat-membership-item-renderer #header-content-inner-column * { 
-            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
-            font-size: 20px !important; 
-            line-height: 22px !important; 
-        } 
-        
-        yt-live-chat-paid-message-renderer #purchase-amount, 
-        yt-live-chat-paid-message-renderer #purchase-amount *, 
-        yt-live-chat-membership-item-renderer #header-subtext, 
-        yt-live-chat-membership-item-renderer #header-subtext * { 
-            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
-            font-size: 18px !important; 
-            line-height: 20px !important; 
-        } 
-        
-        yt-live-chat-paid-message-renderer #content, 
-        yt-live-chat-paid-message-renderer #content * { 
-            font-family: "Noto Sans SC", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "\5FAE \8F6F \96C5 \9ED1 ", SimHei, Arial, sans-serif; 
-            font-size: 18px !important; 
-            line-height: 20px !important; 
-        } 
-        
-        yt-live-chat-membership-item-renderer #card, 
-        yt-live-chat-membership-item-renderer #header { 
-            background-color: #0f9d58 !important; 
-            margin: 4px 0 !important; 
-        } 
+        yt-live-chat-paid-message-renderer #header #author-photo img {
+             width: 100%;
+             height: 100%;
+             object-fit: cover;
+        }
+
+        /* Content in Header */
+        yt-live-chat-paid-message-renderer #header-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        yt-live-chat-paid-message-renderer #header-content-primary-column {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        yt-live-chat-paid-message-renderer #author-name {
+            font-size: 16px !important;
+            font-weight: 700;
+            color: #ffffff !important;
+            line-height: 1.2 !important;
+            opacity: 1;
+        }
+
+        yt-live-chat-paid-message-renderer #purchase-amount {
+            font-size: 14px !important;
+            font-weight: 500;
+            color: #ffffff !important;
+            line-height: 1.2 !important;
+            margin-top: 2px;
+            opacity: 0.9;
+        }
+
+        /* Body */
+        yt-live-chat-paid-message-renderer #body {
+            padding: 10px 12px;
+            background-color: var(--yt-live-chat-paid-message-secondary-color, #0d47a1);
+            color: #ffffff;
+        }
+
+        yt-live-chat-paid-message-renderer #message {
+            font-size: 15px !important;
+            line-height: 1.4 !important;
+            color: #ffffff !important;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+
+        /* =========================================
+           Membership / Guard Optimization
+           ========================================= */
+        yt-live-chat-membership-item-renderer {
+            margin: 8px 0 !important;
+            display: block;
+            position: relative;
+        }
+
+        yt-live-chat-membership-item-renderer #card {
+            display: flex;
+            flex-direction: column;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            overflow: hidden;
+            font-family: "Noto Sans SC", sans-serif;
+            background-color: #0f9d58 !important; /* Green for membership */
+        }
+
+        yt-live-chat-membership-item-renderer #header {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: transparent !important; /* Color handled by card */
+            color: #ffffff;
+            min-height: 48px;
+        }
+
+        yt-live-chat-membership-item-renderer #header #author-photo {
+            width: 40px !important;
+            height: 40px !important;
+            border-radius: 50%;
+            margin-right: 12px !important;
+            overflow: hidden;
+            flex-shrink: 0;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        yt-live-chat-membership-item-renderer #header #author-photo img {
+             width: 100%;
+             height: 100%;
+             object-fit: cover;
+        }
+
+        yt-live-chat-membership-item-renderer #header-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        yt-live-chat-membership-item-renderer #header-content-inner-column {
+            font-size: 16px !important;
+            font-weight: 700;
+            color: #ffffff !important;
+            line-height: 1.2 !important;
+            margin-bottom: 2px;
+        }
+
+        yt-live-chat-membership-item-renderer #header-subtext {
+            font-size: 14px !important;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9) !important;
+            line-height: 1.2 !important;
+        }
         
         yt-live-chat-ticker-renderer { 
             display: none !important; 
@@ -392,9 +520,28 @@
             margin-bottom: 2px;
             vertical-align: baseline;
         }
+
+        /* Gift Style */
+        .gift-card {
+            display: flex;
+            align-items: center;
+            background: linear-gradient(90deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+            border-radius: 24px;
+            padding: 8px 16px;
+            margin: 8px 0;
+            color: #d6336c;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .gift-card img {
+            width: 40px;
+            height: 40px;
+            margin-right: 12px;
+            border-radius: 50%;
+        }
     </style>
 </head>
-<body style="background: #333; overflow: hidden;">
+<body style="background: transparent; overflow: hidden;">
     <yt-live-chat-renderer>
         <yt-live-chat-item-list-renderer>
             <div id="items">
@@ -404,14 +551,24 @@
     </yt-live-chat-renderer>
 
     <script>
-        const socket = io('http://localhost:18888', {
-            transports: ['websocket'],
-            reconnection: true
-        });
-
+        // MOCK DATA GENERATOR
         const itemsContainer = document.getElementById('items');
-        // 默认头像 (B站小电视或灰色头像)
         const DEFAULT_FACE = 'https://i0.hdslb.com/bfs/face/member/noface.jpg';
+        
+        const NAMES = ["Alice", "Bob", "Charlie", "David", "Eve", "Bilibili User", "CoolGuy", "SuperFan", "Miku", "Lulu"];
+        const MESSAGES = [
+            "Hello!", "Nice stream", "LOL", "Testing...", "Rich!", "Where is the cat?", "23333", "Great content",
+            "This is a very long message to test the layout and line breaking of the chat bubble. It should handle wrapping correctly.",
+            "Good luck!", "Have fun!"
+        ];
+        
+        function randomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function randomItem(arr) {
+            return arr[randomInt(0, arr.length - 1)];
+        }
 
         function addElement(element) {
             itemsContainer.appendChild(element);
@@ -439,10 +596,8 @@
             img.width = 24;
             img.height = 24;
             
-            // 只有当 URL 不是默认头像时才监听错误
             if (validUrl !== DEFAULT_FACE) {
                 img.onerror = () => { 
-                    // 防止死循环：只有当当前 src 不是默认头像时才重置
                     if (img.src !== DEFAULT_FACE) {
                         img.src = DEFAULT_FACE; 
                     }
@@ -479,155 +634,215 @@
             return chip;
         }
 
-        socket.on('danmu-message', (msg) => {
-            console.log('MSG:', msg);
+        function generateDanmu() {
+            const uname = randomItem(NAMES);
+            const content = randomItem(MESSAGES);
+            const isGuard = Math.random() > 0.8;
+            const isAdmin = Math.random() > 0.95;
+            const isSticker = Math.random() > 0.8; // 20% chance of being a sticker
+            const face = DEFAULT_FACE;
+            
+            const el = document.createElement('yt-live-chat-text-message-renderer');
+            el.className = 'style-scope yt-live-chat-item-list-renderer';
+            if (isAdmin) el.setAttribute('author-type', 'moderator');
+            else if (isGuard) el.setAttribute('author-type', 'member');
+            
+            el.appendChild(createAvatar(face));
 
-            // 1. 普通弹幕
-            if (msg.cmd === 'DANMU_MSG') {
-                const info = msg.info;
-                const uname = info[2][1];
-                const content = info[1];
-                const isGuard = info[7] > 0;
-                const isAdmin = info[2][2] === 1;
+            const contentDiv = document.createElement('div');
+            contentDiv.id = 'content';
+            contentDiv.className = 'style-scope yt-live-chat-text-message-renderer';
+            
+            contentDiv.appendChild(createAuthorChip(uname, isAdmin ? 'moderator' : (isGuard ? 'member' : '')));
+            
+            const messageSpan = document.createElement('span');
+            messageSpan.id = 'message';
+            messageSpan.className = 'style-scope yt-live-chat-text-message-renderer';
+            
+            if (isSticker) {
+                // Mock sticker URL (using Bilibili sticker example or just a placeholder image)
+                // Using a known Bilibili sticker URL for testing
+                const stickerUrl = "https://i0.hdslb.com/bfs/emote/3087d273a787b2906c269c5955d246b3955ce394.png";
                 
-                // 尝试获取注入的 face，如果没有则用默认
-                // 后端逻辑：第一次发弹幕可能没有 face（正在取），第二次就会有了
-                const face = msg.face || DEFAULT_FACE;
-                
-                const el = document.createElement('yt-live-chat-text-message-renderer');
-                el.className = 'style-scope yt-live-chat-item-list-renderer';
-                if (isAdmin) el.setAttribute('author-type', 'moderator');
-                else if (isGuard) el.setAttribute('author-type', 'member');
-                
-                el.appendChild(createAvatar(face));
-
-                const contentDiv = document.createElement('div');
-                contentDiv.id = 'content';
-                contentDiv.className = 'style-scope yt-live-chat-text-message-renderer';
-                
-                contentDiv.appendChild(createAuthorChip(uname, isAdmin ? 'moderator' : (isGuard ? 'member' : '')));
-                
-                const messageSpan = document.createElement('span');
-                messageSpan.id = 'message';
-                messageSpan.className = 'style-scope yt-live-chat-text-message-renderer';
+                const emojiImg = document.createElement('img');
+                emojiImg.src = stickerUrl;
+                emojiImg.className = 'emoji bili-sticker style-scope yt-live-chat-text-message-renderer';
+                messageSpan.appendChild(emojiImg);
+            } else {
                 messageSpan.innerText = content;
-                contentDiv.appendChild(messageSpan);
-
-                el.appendChild(contentDiv);
-                addElement(el);
             }
+            
+            contentDiv.appendChild(messageSpan);
 
-            // 2. 舰长 (USER_TOAST_MSG)
-            else if (msg.cmd === 'USER_TOAST_MSG') {
-                const data = msg.data;
-                // 舰长消息通常包含 face
-                
-                const el = document.createElement('yt-live-chat-membership-item-renderer');
-                el.className = 'style-scope yt-live-chat-item-list-renderer';
-                
-                const card = document.createElement('div');
-                card.id = 'card';
-                card.className = 'style-scope yt-live-chat-membership-item-renderer';
-                
-                const header = document.createElement('div');
-                header.id = 'header';
-                header.className = 'style-scope yt-live-chat-membership-item-renderer';
-                
-                // 使用数据中的头像
-                const avatarUrl = data.face || data.user_info?.face;
-                header.appendChild(createAvatar(avatarUrl));
-                
-                const headerContent = document.createElement('div');
-                headerContent.id = 'header-content';
-                headerContent.className = 'style-scope yt-live-chat-membership-item-renderer';
-                
-                const authorName = document.createElement('div');
-                authorName.id = 'header-content-inner-column';
-                authorName.className = 'style-scope yt-live-chat-membership-item-renderer';
-                authorName.innerText = data.username;
-                
-                const subtext = document.createElement('div');
-                subtext.id = 'header-subtext';
-                subtext.className = 'style-scope yt-live-chat-membership-item-renderer';
-                const guardName = data.guard_level === 1 ? '总督' : (data.guard_level === 2 ? '提督' : '舰长');
-                subtext.innerText = `开通了 ${guardName} x${data.num}${data.unit}`;
-                
-                headerContent.appendChild(authorName);
-                headerContent.appendChild(subtext);
-                header.appendChild(headerContent);
-                
-                card.appendChild(header);
-                el.appendChild(card);
-                addElement(el);
-            }
+            el.appendChild(contentDiv);
+            addElement(el);
+        }
 
-            // 3. SuperChat (SUPER_CHAT_MESSAGE)
-            else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
-                const data = msg.data;
-                const el = document.createElement('yt-live-chat-paid-message-renderer');
-                el.className = 'style-scope yt-live-chat-item-list-renderer';
-                
-                // 设置 SC 颜色
-                const price = data.price;
-                if (price >= 2000) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#d00000');
-                else if (price >= 1000) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#e62117');
-                else if (price >= 500) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#e62117');
-                else if (price >= 100) el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#ffb300');
-                else el.style.setProperty('--yt-live-chat-paid-message-primary-color', '#1565c0');
-                
-                const card = document.createElement('div');
-                card.id = 'card';
-                card.className = 'style-scope yt-live-chat-paid-message-renderer';
-                
-                const header = document.createElement('div');
-                header.id = 'header';
-                header.className = 'style-scope yt-live-chat-paid-message-renderer';
-                header.style.backgroundColor = 'var(--yt-live-chat-paid-message-primary-color)';
-                
-                // 使用数据中的头像
-                const avatarUrl = data.user_info?.face || data.face;
-                header.appendChild(createAvatar(avatarUrl));
-                
-                const headerContent = document.createElement('div');
-                headerContent.id = 'header-content';
-                headerContent.className = 'style-scope yt-live-chat-paid-message-renderer';
-                const primaryCol = document.createElement('div');
-                primaryCol.id = 'header-content-primary-column';
-                primaryCol.className = 'style-scope yt-live-chat-paid-message-renderer';
-                
-                const name = document.createElement('div');
-                name.id = 'author-name';
-                name.className = 'style-scope yt-live-chat-paid-message-renderer';
-                name.innerText = data.user_info?.uname || '未知用户';
-                
-                const amount = document.createElement('div');
-                amount.id = 'purchase-amount';
-                amount.className = 'style-scope yt-live-chat-paid-message-renderer';
-                amount.innerText = `￥${price}`;
-                
-                primaryCol.appendChild(name);
-                primaryCol.appendChild(amount);
-                headerContent.appendChild(primaryCol);
-                header.appendChild(headerContent);
-                
-                const body = document.createElement('div');
-                body.id = 'body';
-                body.className = 'style-scope yt-live-chat-paid-message-renderer';
-                body.style.backgroundColor = 'var(--yt-live-chat-paid-message-secondary-color, #1565c0)'; 
-                
-                const message = document.createElement('div');
-                message.id = 'message';
-                message.className = 'style-scope yt-live-chat-paid-message-renderer';
-                message.innerText = data.message;
-                
-                body.appendChild(message);
-                
-                card.appendChild(header);
-                card.appendChild(body);
-                el.appendChild(card);
-                addElement(el);
+        function generateSC() {
+            const uname = randomItem(NAMES);
+            const content = randomItem(MESSAGES);
+            const priceOpts = [10, 30, 50, 100, 200, 500, 1000, 2000, 5000];
+            const price = randomItem(priceOpts);
+            
+            const el = document.createElement('yt-live-chat-paid-message-renderer');
+            el.className = 'style-scope yt-live-chat-item-list-renderer';
+            
+            let primaryColor = '#1565c0';
+            let secondaryColor = '#0d47a1';
+
+            if (price >= 2000) {
+                primaryColor = '#d00000'; // Red Dark
+                secondaryColor = '#b71c1c';
+            } else if (price >= 1000) {
+                primaryColor = '#e62117'; // Red
+                secondaryColor = '#c62828';
+            } else if (price >= 500) {
+                primaryColor = '#e91e63'; // Magenta
+                secondaryColor = '#c2185b';
+            } else if (price >= 100) {
+                primaryColor = '#ffb300'; // Orange/Yellow
+                secondaryColor = '#f57f17';
+            } else if (price >= 30) {
+                primaryColor = '#00b8d4'; // Cyan
+                secondaryColor = '#0091ea';
+            } else {
+                primaryColor = '#1565c0'; // Blue
+                secondaryColor = '#0d47a1';
             }
-        });
+            
+            el.style.setProperty('--yt-live-chat-paid-message-primary-color', primaryColor);
+            el.style.setProperty('--yt-live-chat-paid-message-secondary-color', secondaryColor);
+            
+            const card = document.createElement('div');
+            card.id = 'card';
+            card.className = 'style-scope yt-live-chat-paid-message-renderer';
+            
+            const header = document.createElement('div');
+            header.id = 'header';
+            header.className = 'style-scope yt-live-chat-paid-message-renderer';
+            
+            header.appendChild(createAvatar(DEFAULT_FACE));
+            
+            const headerContent = document.createElement('div');
+            headerContent.id = 'header-content';
+            headerContent.className = 'style-scope yt-live-chat-paid-message-renderer';
+            const primaryCol = document.createElement('div');
+            primaryCol.id = 'header-content-primary-column';
+            primaryCol.className = 'style-scope yt-live-chat-paid-message-renderer';
+            
+            const name = document.createElement('div');
+            name.id = 'author-name';
+            name.className = 'style-scope yt-live-chat-paid-message-renderer';
+            name.innerText = uname;
+            
+            const amount = document.createElement('div');
+            amount.id = 'purchase-amount';
+            amount.className = 'style-scope yt-live-chat-paid-message-renderer';
+            amount.innerText = `￥${price}`;
+            
+            primaryCol.appendChild(name);
+            primaryCol.appendChild(amount);
+            headerContent.appendChild(primaryCol);
+            header.appendChild(headerContent);
+            
+            const body = document.createElement('div');
+            body.id = 'body';
+            body.className = 'style-scope yt-live-chat-paid-message-renderer';
+            
+            const message = document.createElement('div');
+            message.id = 'message';
+            message.className = 'style-scope yt-live-chat-paid-message-renderer';
+            message.innerText = content;
+            
+            body.appendChild(message);
+            
+            card.appendChild(header);
+            card.appendChild(body);
+            el.appendChild(card);
+            addElement(el);
+        }
+
+        function generateGuard() {
+            const uname = randomItem(NAMES);
+            const level = randomInt(1, 3);
+            const num = randomInt(1, 12);
+            
+            const el = document.createElement('yt-live-chat-membership-item-renderer');
+            el.className = 'style-scope yt-live-chat-item-list-renderer';
+            
+            const card = document.createElement('div');
+            card.id = 'card';
+            card.className = 'style-scope yt-live-chat-membership-item-renderer';
+            
+            const header = document.createElement('div');
+            header.id = 'header';
+            header.className = 'style-scope yt-live-chat-membership-item-renderer';
+            
+            header.appendChild(createAvatar(DEFAULT_FACE));
+            
+            const headerContent = document.createElement('div');
+            headerContent.id = 'header-content';
+            headerContent.className = 'style-scope yt-live-chat-membership-item-renderer';
+            
+            const authorName = document.createElement('div');
+            authorName.id = 'header-content-inner-column';
+            authorName.className = 'style-scope yt-live-chat-membership-item-renderer';
+            authorName.innerText = uname;
+            
+            const subtext = document.createElement('div');
+            subtext.id = 'header-subtext';
+            subtext.className = 'style-scope yt-live-chat-membership-item-renderer';
+            const guardName = level === 1 ? '总督' : (level === 2 ? '提督' : '舰长');
+            subtext.innerText = `开通了 ${guardName} x${num} 个月`;
+            
+            headerContent.appendChild(authorName);
+            headerContent.appendChild(subtext);
+            header.appendChild(headerContent);
+            
+            card.appendChild(header);
+            el.appendChild(card);
+            addElement(el);
+        }
+
+        function generateGift() {
+            const uname = randomItem(NAMES);
+            const gifts = ["小电视", "B坷垃", "辣条", "亿圆", "花束"];
+            const giftName = randomItem(gifts);
+            const num = randomInt(1, 99);
+            
+            // Simple Gift Renderer using CSS
+            const el = document.createElement('div');
+            el.className = 'gift-card style-scope yt-live-chat-item-list-renderer';
+            
+            const img = document.createElement('img');
+            img.src = DEFAULT_FACE;
+            el.appendChild(img);
+            
+            const text = document.createElement('span');
+            text.innerText = `${uname} 投喂了 ${giftName} x${num}`;
+            el.appendChild(text);
+            
+            addElement(el);
+        }
+
+        // Main Loop
+        setInterval(() => {
+            const r = Math.random();
+            if (r < 0.6) {
+                generateDanmu();
+            } else if (r < 0.8) {
+                generateGift();
+            } else if (r < 0.9) {
+                generateSC();
+            } else {
+                generateGuard();
+            }
+        }, 800); // Every 800ms
+        
+        // Initial messages
+        generateDanmu();
+        generateDanmu();
+        generateSC();
     </script>
 </body>
 </html>
