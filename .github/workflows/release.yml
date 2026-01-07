@@ -52,7 +52,7 @@ jobs:
         run: npm ci
 
       - name: Build Nextron App
-        run: npm run build
+        run: npm run build -- -p never
 
       - name: Package Electron App (Windows)
         if: matrix.os == 'windows-latest'
