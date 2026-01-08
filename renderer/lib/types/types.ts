@@ -33,5 +33,6 @@ export class Sender {
   uid: number = 0
   uname: string = ''
   face: string = ''
+  is_manager: boolean = false
   medal_info: MedalInfo = new MedalInfo()
 }

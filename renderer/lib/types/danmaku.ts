@@ -83,6 +83,11 @@ export class DanmuMessage {
     if (body.info[2][2] > 0) {
       this.is_special = true
     }
+    
+    // Check for manager (Admin)
+    if (body.info[2][2] == 1) {
+        this.sender.is_manager = true
+    }
   }
 }
 

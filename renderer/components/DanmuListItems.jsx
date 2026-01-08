@@ -83,6 +83,13 @@ export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onU
                           alt="guard"
                       />
                   )}
+
+                  {/* 房管图标 */}
+                  {msg.sender.is_manager && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff9800" style={{ marginRight: '4px', flexShrink: 0 }}>
+                          <path d="M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6.1L6,10.4L1.7,6C0.6,8.4 1,11.4 3,13.4C4.9,15.3 7.6,15.8 9.9,14.9L19,24L22.7,19Z" />
+                      </svg>
+                  )}
                   
                   {/* 发送者 */}
                   <span 

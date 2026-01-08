@@ -220,6 +220,13 @@ export default function DebugPanel({ onClose }) {
                 >
                     模拟主进程 Rejection
                 </button>
+
+                <button 
+                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-renderer' })}
+                    style={{ padding: '8px', backgroundColor: '#c92a2a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                    模拟渲染进程崩溃 (Renderer Crash)
+                </button>
             </div>
         )}
 

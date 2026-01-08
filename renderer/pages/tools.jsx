@@ -281,6 +281,22 @@ const DanmuVote = () => {
     const isVotingRef = useRef(false)
     const timerRef = useRef(null)
 
+    // 全角转半角 & 统一处理
+    const normalize = (str) => {
+        let result = "";
+        for (let i = 0; i < str.length; i++) {
+            let code = str.charCodeAt(i);
+            if (code === 0x3000) {
+                result += String.fromCharCode(0x0020);
+            } else if (code > 0xFF00 && code < 0xFF5F) {
+                result += String.fromCharCode(code - 0xFEE0);
+            } else {
+                result += str.charAt(i);
+            }
+        }
+        return result.toLowerCase().trim();
+    }
+
     // 初始化选项
     useEffect(() => {
         if (voteStatus === 'idle') {
@@ -342,11 +358,12 @@ const DanmuVote = () => {
                         return 
                     }
                     
-                    // 简单的包含匹配
+                    const normalizedContent = normalize(content)
+                    
+                    // 严格相等匹配 (标准化后)
                     for (let i = 0; i < currentResults.length; i++) {
                         const opt = currentResults[i]
-                        // 忽略大小写
-                        if (content.toLowerCase().includes(opt.label.toLowerCase())) {
+                        if (normalizedContent === normalize(opt.label)) {
                             console.log('[Tools] Matched Option:', opt.label) // Add Log
                             if (!isDebug) currentUids.add(uid)
                             currentResults[i].count += 1

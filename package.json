@@ -2,7 +2,7 @@
   "private": true,
   "name": "luludanmaku",
   "description": "lulu专用弹幕姬",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "author": "Payne <payne9586@gmail.com>",
   "main": "app/background.js",
   "scripts": {

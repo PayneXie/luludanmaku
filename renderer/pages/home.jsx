@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import React, { useEffect, useLayoutEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import Head from 'next/head'
 import QRCode from 'qrcode'
@@ -921,17 +921,41 @@ export default function HomePage() {
   }
 
   // 自动滚动/置顶逻辑
-  useEffect(() => {
-    // 现在的列表顺序是 [New, Old...]
-    // 只要 scrollTop 在 0，用户就能看到最新的。
-    // 如果用户没有滚动（或者距离顶部很近），我们强制保持在顶部。
-    if (danmuListRef.current) {
-        const { scrollTop } = danmuListRef.current
-        if (scrollTop < 50) { 
-            danmuListRef.current.scrollTop = 0
+  const prevScrollHeightRef = useRef(0)
+
+  useLayoutEffect(() => {
+    const container = danmuListRef.current
+    if (!container) return
+
+    const currentScrollHeight = container.scrollHeight
+    const prevScrollHeight = prevScrollHeightRef.current
+    const heightDiff = currentScrollHeight - prevScrollHeight
+
+    // 记录当前的 scrollHeight 供下次比较
+    prevScrollHeightRef.current = currentScrollHeight
+
+    // 如果高度没有变化，或者是首次渲染（prev为0），不需要调整
+    if (heightDiff <= 0 || prevScrollHeight === 0) {
+        // 如果是置顶模式且处于顶部附近，强制归零
+        if (isAlwaysOnTop && container.scrollTop < 50) {
+            container.scrollTop = 0
         }
+        return
     }
-  }, [danmuList])
+
+    // 判断是否应该吸附顶部 (Stick to Top)
+    // 1. 如果是置顶模式，且用户在顶部附近 (容差 50px)，则吸附
+    // 2. 如果是非置顶模式，但用户紧贴顶部 (scrollTop = 0)，也吸附 (因为新消息在最上面，保持 0 就能看到最新的)
+    const isAtTop = container.scrollTop < (isAlwaysOnTop ? 50 : 2);
+
+    if (isAtTop) {
+        // 吸附顶部：强制归零
+        container.scrollTop = 0
+    } else {
+        // 锁定视觉位置：向下滚动 heightDiff
+        container.scrollTop += heightDiff
+    }
+  }, [danmuList, isAlwaysOnTop, danmuFilter])
 
   if (!loggedIn) {
       return (
@@ -1698,7 +1722,12 @@ export default function HomePage() {
                       <div 
                         ref={danmuListRef}
                         className={styles['col-content']}
-                        style={{ flex: 1, overflowY: 'auto' }}
+                        style={{ 
+                            flex: 1, 
+                            overflowY: 'auto',
+                            // 禁用浏览器默认的锚定，完全由 JS 接管控制
+                            overflowAnchor: 'none'
+                        }}
                       >
                           {danmuList.map(item => { // 直接 map
                               // Filter logic moved here to avoid creating intermediate arrays

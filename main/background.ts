@@ -46,6 +46,30 @@ process.on('unhandledRejection', (reason: any) => {
   );
 });
 
+// Catch Process Crashes (Native/OOM/GPU)
+app.on('render-process-gone', (event, webContents, details) => {
+  log.error(`[Crash] Render Process Gone: Reason=${details.reason}, ExitCode=${details.exitCode}`);
+  
+  // OOM is a common silent killer
+  if (details.reason === 'oom') {
+      dialog.showErrorBox('内存溢出 (OOM)', '程序内存不足导致崩溃。请尝试重启软件。');
+  } else if (details.reason === 'crashed') {
+      dialog.showErrorBox('渲染进程崩溃', `渲染进程意外退出。\n原因: ${details.reason}\n请检查日志。`);
+  } else {
+      // killed, integrity-failure, etc.
+      log.warn(`Render process gone with reason: ${details.reason}`);
+  }
+});
+
+app.on('child-process-gone', (event, details) => {
+  log.error(`[Crash] Child Process Gone: Type=${details.type}, Reason=${details.reason}, ExitCode=${details.exitCode}`);
+  
+  if (details.type === 'GPU' && details.reason === 'crashed') {
+      // GPU crashes are often recovered automatically, but if frequent, suggest disabling hardware acceleration
+      log.warn('GPU Process crashed. If this happens frequently, consider disabling Hardware Acceleration.');
+  }
+});
+
 // Redirect console to log
 Object.assign(console, log.functions);
 
@@ -855,6 +879,9 @@ ipcMain.on('bilibili-debug-stress', async (event, { action }) => {
       throw new Error('Manually triggered Uncaught Exception via IPC')
   } else if (action === 'crash-main-async') {
       Promise.reject(new Error('Manually triggered Unhandled Rejection via IPC'))
+  } else if (action === 'crash-renderer') {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      win?.webContents.forcefullyCrashRenderer()
   }
 })
 

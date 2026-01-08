@@ -152,6 +152,16 @@
             vertical-align: middle;
         }
         
+        /* Admin/Manager Icon */
+        .icon-admin {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            vertical-align: middle;
+            margin-right: 2px;
+            fill: #ff9800;
+        }
+
         /* Message Bubble */
         .bubble {
             position: relative;
@@ -526,7 +536,16 @@
                 nameSpan.className = 'name';
                 nameSpan.innerText = msg.name;
                 header.appendChild(nameSpan);
-                contentDiv.appendChild(header);
+                // Manager Icon
+        if (msg.isManager) {
+            // Simple Wrench SVG
+            const adminIcon = document.createElement('span');
+            adminIcon.className = 'icon-admin';
+            adminIcon.innerHTML = `<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:#ff9800"><path d="M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6.1L6,10.4L1.7,6C0.6,8.4 1,11.4 3,13.4C4.9,15.3 7.6,15.8 9.9,14.9L19,24L22.7,19Z" /></svg>`;
+            header.appendChild(adminIcon);
+        }
+
+        contentDiv.appendChild(header);
                 
                 // Gift Bubble
                 const bubble = document.createElement('div');
@@ -620,6 +639,15 @@
             else if (msg.guard === 1) iconImg.src = 'https://i0.hdslb.com/bfs/activity-plat/static/20211222/627754775478985e330c25a90ec7baf0/icon-guard1.png@44w_44h.webp';
             
             header.appendChild(iconImg);
+        }
+
+        // Manager Icon
+        if (msg.isManager) {
+            // Simple Wrench SVG
+            const adminIcon = document.createElement('span');
+            adminIcon.className = 'icon-admin';
+            adminIcon.innerHTML = `<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:#ff9800"><path d="M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6.1L6,10.4L1.7,6C0.6,8.4 1,11.4 3,13.4C4.9,15.3 7.6,15.8 9.9,14.9L19,24L22.7,19Z" /></svg>`;
+            header.appendChild(adminIcon);
         }
 
         contentDiv.appendChild(header);
@@ -719,7 +747,8 @@
                         name: user.name,
                         guard: user.guard,
                         avatar: user.avatar,
-                        content: text
+                        content: text,
+                        isManager: Math.random() < 0.1
                     };
                 }
                 
