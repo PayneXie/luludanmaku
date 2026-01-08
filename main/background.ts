@@ -1,7 +1,54 @@
 import path from 'path'
 import { app, ipcMain, Menu, BrowserWindow, shell, clipboard } from 'electron'
 import serve from 'electron-serve'
+import log from 'electron-log/main'
 import { createWindow } from './helpers'
+
+// Initialize electron-log
+log.initialize();
+log.transports.file.level = 'info';
+log.transports.console.level = 'debug';
+// Log rotation (Keep last 7 days)
+log.transports.file.resolvePathFn = () => path.join(app.getPath('userData'), 'logs/main.log');
+// No specific rotation config needed, electron-log rotates 'main.log', 'main.old.log' by default.
+// But to be safe and keep more history, let's just let it be standard behavior or customization if needed.
+// Standard behavior: main.log -> main.old.log. Just 1 backup.
+// Let's customize archive logic if user wants "not flushed away".
+// Actually electron-log default is: limit 1MB, keep 2 files.
+// We can increase it.
+log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB
+log.transports.file.archiveLogFn = (oldLogFile) => {
+  const fileInfo = path.parse(oldLogFile.toString());
+  try {
+      const date = new Date().toISOString().replace(/T/, '_').replace(/:/g, '-').split('.')[0];
+      const newFileName = path.join(fileInfo.dir, `main-${date}${fileInfo.ext}`);
+      fs.renameSync(oldLogFile.toString(), newFileName);
+  } catch (e) {
+      console.error('Could not rotate log', e);
+  }
+};
+
+import { dialog } from 'electron';
+
+// Catch global errors
+process.on('uncaughtException', (error) => {
+  log.error('Uncaught Exception:', error);
+  dialog.showErrorBox('发生严重错误 (Uncaught Exception)', 
+      `程序发生崩溃，请截图此信息反馈给开发者。\n\n错误信息:\n${error.message}\n\n日志位置:\n${app.getPath('userData')}\\logs\\`
+  );
+  // process.exit(1); // Optional: force exit or try to stay alive
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  log.error('Unhandled Rejection:', reason);
+  dialog.showErrorBox('发生严重错误 (Unhandled Rejection)', 
+      `程序检测到未处理的异步错误，请截图此信息反馈给开发者。\n\n错误信息:\n${reason?.message || reason}\n\n日志位置:\n${app.getPath('userData')}\\logs\\`
+  );
+});
+
+// Redirect console to log
+Object.assign(console, log.functions);
+
 import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo, BiliCookies, GetUserInfo, GetBiliUserInfo, GetRoomInfo, GetSilentUserList, AddSilentUser } from './lib/bilibili_login'
 import { BiliWebSocket, WsInfo, PackResult } from './lib/bilibili_socket'
 import { initOverlayServer, broadcastToOverlay, closeOverlayServer } from './lib/overlay_server'
@@ -13,6 +60,47 @@ let activeBiliSocket: BiliWebSocket | null = null
 let messageBuffer: any[] = []
 let messageTimer: NodeJS.Timeout | null = null
 let activeCookies: BiliCookies = {} // Store cookies globally in main process
+
+// Stress Test State (Global Scope)
+let stressTestTimer: NodeJS.Timeout | null = null
+
+const startDanmuFlood = () => {
+    if (stressTestTimer) clearInterval(stressTestTimer)
+    log.info('[StressTest] Starting Danmaku Flood...')
+    const win = BrowserWindow.getAllWindows()[0]
+    
+    stressTestTimer = setInterval(() => {
+        const batch = []
+        for (let i = 0; i < 100; i++) {
+        batch.push({
+            cmd: 'DANMU_MSG',
+            info: [
+            [0, 1, 25, 16777215, 1704380000, 0, 0, ""],
+            `Stress Test Message ${Date.now()}_${i}`,
+            [12345 + i, `StressUser_${i}`, 0, 0, 0, 10000, 1, ""],
+            [5, "Test", "Anchor", 123, 0x5896de, "", 0],
+            [0, 0, 9868950, ">50000"],
+            ["", ""],
+            0, 0, null, { "ts": 1704380000, "ct": "A76F3C90" }, 0, 0, null, null, 0, 210
+            ]
+        })
+        }
+        // Send directly to renderer via IPC to simulate high load
+        // Also broadcast to overlay
+        batch.forEach(msg => {
+            if (win) win.webContents.send('danmu-message', msg)
+            broadcastToOverlay('danmu-message', msg)
+        })
+    }, 100) // Every 100ms send 100 messages = 1000 msg/s
+}
+
+const stopDanmuFlood = () => {
+    if (stressTestTimer) {
+        clearInterval(stressTestTimer)
+        stressTestTimer = null
+        log.info('[StressTest] Stopped Danmaku Flood')
+    }
+}
 
 // Face Cache Configuration
 const FACE_CACHE_FILE = path.join(app.getPath('userData'), 'face_cache.json')
@@ -160,6 +248,10 @@ if (isProd) {
 
   ;(async () => {
     await app.whenReady()
+    
+    log.info('App starting...');
+    log.info('Version:', app.getVersion());
+    log.info('UserData:', app.getPath('userData'));
 
   const mainWindow = createWindow('main', {
     width: 1000,
@@ -182,9 +274,52 @@ if (isProd) {
 
   // Debug Menu
   const menuTemplate: Electron.MenuItemConstructorOptions[] = [
-    {
-      label: 'Debug Tools',
-      submenu: [
+  {
+    label: 'Debug Tools',
+    submenu: [
+      {
+        label: 'Stress Test (Risk of Crash)',
+        submenu: [
+          {
+            label: 'Start Danmaku Flood (100 msgs/100ms)',
+            click: startDanmuFlood
+          },
+          {
+            label: 'Stop Danmaku Flood',
+            click: stopDanmuFlood
+          },
+          { type: 'separator' },
+            {
+              label: 'Flood Face Cache (1000 Random UIDs)',
+              click: async () => {
+                log.info('[StressTest] Starting Face Cache Flood...')
+                for (let i = 0; i < 1000; i++) {
+                   // Random UID between 1000000 and 2000000
+                   const randomUid = 1000000 + Math.floor(Math.random() * 1000000)
+                   // Trigger resolve (async, don't await to flood the queue)
+                   resolveUserFace(randomUid, 'low')
+                }
+                log.info('[StressTest] 1000 requests added to queue')
+              }
+            },
+            { type: 'separator' },
+            {
+              label: 'Simulate Uncaught Exception',
+              click: () => {
+                log.info('[StressTest] Throwing Error...')
+                throw new Error('Manually triggered Uncaught Exception for testing')
+              }
+            },
+            {
+              label: 'Simulate Unhandled Rejection',
+              click: () => {
+                log.info('[StressTest] Triggering Rejection...')
+                Promise.reject(new Error('Manually triggered Unhandled Rejection for testing'))
+              }
+            }
+          ]
+        },
+        { type: 'separator' },
         {
           label: 'Send Test Danmaku',
           click: () => {
@@ -405,80 +540,101 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
       if (messageBuffer.length > 0) {
         // Send batch
         event.reply('danmu-message', messageBuffer)
+        
+        // Forward to tools window if it exists
+        if (toolsWindow && !toolsWindow.isDestroyed()) {
+            toolsWindow.webContents.send('danmu-message', messageBuffer)
+        }
+
         messageBuffer = []
       }
     }, 100)
 
     activeBiliSocket = new BiliWebSocket(wsInfo, (packet: PackResult) => {
        // Filter for DANMU_MSG or other interest
-       packet.body.forEach(async msg => {
-          // console.log('Forwarding MSG:', msg.cmd) // Debug
-          if (msg.cmd === 'DANMU_MSG') {
-             // Inject Face from Cache
-             const uid = msg.info[2][0]
-             // 普通弹幕：低优先级
-             const cachedFace = await resolveUserFace(uid, 'low')
-             if (cachedFace) {
-                 ;(msg as any).face = cachedFace
-             }
-             
-             messageBuffer.push(msg)
-             broadcastToOverlay('danmu-message', msg)
+       // Use for...of loop instead of forEach to better handle async/errors
+       ;(async () => {
+         for (const msg of packet.body) {
+            try {
+              // console.log('Forwarding MSG:', msg.cmd) // Debug
+              if (msg.cmd === 'DANMU_MSG') {
+                 // Safe check for info array
+                 if (!Array.isArray(msg.info) || !msg.info[2] || !Array.isArray(msg.info[2])) {
+                     log.warn('[Socket] Invalid DANMU_MSG structure:', JSON.stringify(msg));
+                     continue;
+                 }
 
-          } else if (msg.cmd === 'INTERACT_WORD' || 
-              msg.cmd === 'INTERACT_WORD_V2' || 
-              msg.cmd === 'ENTRY_EFFECT' || 
-              msg.cmd === 'SEND_GIFT' || 
-              msg.cmd === 'SUPER_CHAT_MESSAGE' || 
-              msg.cmd === 'ONLINE_RANK_COUNT') {
-            
-            // For other messages, also try to inject face if uid is available
-            let uid = 0
-            if (msg.data && msg.data.uid) uid = msg.data.uid
-            
-            if (uid) {
-                // 礼物、SC、进场等：高优先级
-                const cachedFace = await resolveUserFace(uid, 'high')
-                if (cachedFace) {
-                    if (!msg.data) msg.data = {}
-                    msg.data.face = cachedFace
-                }
-            }
-
-            messageBuffer.push(msg)
-            // Broadcast to Overlay Server (OBS)
-            broadcastToOverlay('danmu-message', msg)
-
-          } else if (msg.cmd === 'USER_TOAST_MSG') {
-             // Fetch user info for Guard message to get avatar
-             try {
-                // Use stored activeCookies
-                const uid = msg.data.uid
+                 // Inject Face from Cache
+                 const uid = msg.info[2][0]
+                 // 普通弹幕：低优先级
+                 const cachedFace = await resolveUserFace(uid, 'low')
+                 if (cachedFace) {
+                     ;(msg as any).face = cachedFace
+                 }
+                 
+                 messageBuffer.push(msg)
+                 broadcastToOverlay('danmu-message', msg)
+    
+              } else if (msg.cmd === 'INTERACT_WORD' || 
+                  msg.cmd === 'INTERACT_WORD_V2' || 
+                  msg.cmd === 'ENTRY_EFFECT' || 
+                  msg.cmd === 'SEND_GIFT' || 
+                  msg.cmd === 'SUPER_CHAT_MESSAGE' || 
+                  msg.cmd === 'ONLINE_RANK_COUNT') {
+                
+                // For other messages, also try to inject face if uid is available
+                let uid = 0
+                if (msg.data && msg.data.uid) uid = msg.data.uid
+                
                 if (uid) {
-                    // Try Cache First
-                    if (faceCache.has(uid)) {
-                        const cachedFace = faceCache.get(uid)
-                        if (cachedFace) msg.data.face = cachedFace
-                    } else {
-                        const userInfo = await GetBiliUserInfo(activeCookies, uid)
-                        if (userInfo && userInfo.face) {
-                            msg.data.face = userInfo.face
-                            faceCache.set(uid, userInfo.face)
-                            isCacheDirty = true
-                        }
+                    // 礼物、SC、进场等：高优先级
+                    const cachedFace = await resolveUserFace(uid, 'high')
+                    if (cachedFace) {
+                        if (!msg.data) msg.data = {}
+                        msg.data.face = cachedFace
                     }
                 }
-             } catch (e) {
-                console.error('Failed to fetch guard user info', e)
-             }
-             messageBuffer.push(msg)
-             // Broadcast to Overlay Server (OBS)
-             broadcastToOverlay('danmu-message', msg)
-          } else if (msg.cmd === 'STOP_LIVE_ROOM_LIST') {
-             // System message, ignore in production
-             // console.log('Ignored system msg:', msg.cmd)
-          }
-       })
+    
+                messageBuffer.push(msg)
+                // Broadcast to Overlay Server (OBS)
+                broadcastToOverlay('danmu-message', msg)
+    
+              } else if (msg.cmd === 'USER_TOAST_MSG') {
+                 // Fetch user info for Guard message to get avatar
+                 try {
+                    // Use stored activeCookies
+                    const uid = msg.data?.uid
+                    if (uid) {
+                        // Try Cache First
+                        if (faceCache.has(uid)) {
+                            const cachedFace = faceCache.get(uid)
+                            if (cachedFace) msg.data.face = cachedFace
+                        } else {
+                            const userInfo = await GetBiliUserInfo(activeCookies, uid)
+                            if (userInfo && userInfo.face) {
+                                msg.data.face = userInfo.face
+                                faceCache.set(uid, userInfo.face)
+                                isCacheDirty = true
+                            }
+                        }
+                    }
+                 } catch (e) {
+                    console.error('Failed to fetch guard user info', e)
+                 }
+                 messageBuffer.push(msg)
+                 // Broadcast to Overlay Server (OBS)
+                 broadcastToOverlay('danmu-message', msg)
+              } else if (msg.cmd === 'STOP_LIVE_ROOM_LIST') {
+                 // System message, ignore in production
+                 // console.log('Ignored system msg:', msg.cmd)
+              }
+            } catch (err) {
+                log.error('[Socket] Error processing message:', err, JSON.stringify(msg));
+            }
+         }
+       })().catch(err => {
+           log.error('[Socket] Critical error in message loop:', err);
+       });
     })
     activeBiliSocket.Connect()
   } catch (e) {
@@ -515,13 +671,20 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
            ], 
            data.content || "Test Danmaku", 
            [uid, data.uname || "TestUser", 0, 0, 0, 10000, 1, ""], 
-           [5, "TestMedal", "TestAnchor", 123, 0x5896de, "", 0, 6809855, 2951253, 10329087, senderGuardLevel, 1], 
+           [5, "TestMedal", "TestAnchor", 123, 0x5896de, "", 0, 6809855, 2951253, 10329087, senderGuardLevel, 1], // Medal info (index 3) -> info[3][10] is guard level
            [0,0,9868950,">50000"], 
            ["title-531-1", "title-531-1"], 
            0, 0, null, { "ts": 1704380000, "ct": "A76F3C90" }, 0, 0, null, null, 0, 210
         ]
      }
+     // Fix: The guard level is primarily at info[7] for the current room
+     mockMsg.info[7] = senderGuardLevel;
+     
      event.reply('danmu-message', mockMsg)
+     broadcastToOverlay('danmu-message', mockMsg)
+     if (toolsWindow && !toolsWindow.isDestroyed()) {
+         toolsWindow.webContents.send('danmu-message', [mockMsg])
+     }
   } else if (type === 'sc') {
     const price = Number(data.price) || 30
     const mockSC = {
@@ -563,6 +726,10 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
         roomid: 123
     }
     event.reply('danmu-message', mockSC)
+    broadcastToOverlay('danmu-message', mockSC)
+    if (toolsWindow && !toolsWindow.isDestroyed()) {
+        toolsWindow.webContents.send('danmu-message', [mockSC])
+    }
   } else if (type === 'gift') {
     const giftPrice = Number(data.giftPrice) || 100
     const num = Number(data.num) || 1
@@ -624,6 +791,10 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
         }
     }
     event.reply('danmu-message', mockGift)
+    broadcastToOverlay('danmu-message', mockGift)
+    if (toolsWindow && !toolsWindow.isDestroyed()) {
+        toolsWindow.webContents.send('danmu-message', [mockGift])
+    }
   } else if (type === 'guard') {
     // Mock USER_TOAST_MSG (Guard)
     const level = Number(data.guardLevel) || 3
@@ -661,6 +832,29 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
         }
     }
     event.reply('danmu-message', mockGuard)
+    broadcastToOverlay('danmu-message', mockGuard)
+    if (toolsWindow && !toolsWindow.isDestroyed()) {
+        toolsWindow.webContents.send('danmu-message', [mockGuard])
+    }
+  }
+})
+
+ipcMain.on('bilibili-debug-stress', async (event, { action }) => {
+  log.info('[StressTest IPC]', action);
+  if (action === 'start-flood') {
+      startDanmuFlood()
+  } else if (action === 'stop-flood') {
+      stopDanmuFlood()
+  } else if (action === 'flood-face') {
+      for (let i = 0; i < 1000; i++) {
+        const randomUid = 1000000 + Math.floor(Math.random() * 1000000)
+        resolveUserFace(randomUid, 'low')
+      }
+      log.info('[StressTest] 1000 requests added to queue')
+  } else if (action === 'crash-main-sync') {
+      throw new Error('Manually triggered Uncaught Exception via IPC')
+  } else if (action === 'crash-main-async') {
+      Promise.reject(new Error('Manually triggered Unhandled Rejection via IPC'))
   }
 })
 
@@ -814,4 +1008,39 @@ ipcMain.on('window-resize', (event, { width, height }) => {
 ipcMain.on('window-set-size', (event, { width, height, animate }) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     win?.setSize(width, height, animate)
+})
+
+// Tools Window IPC
+let toolsWindow: BrowserWindow | null = null
+
+ipcMain.on('open-tools-window', () => {
+    if (toolsWindow && !toolsWindow.isDestroyed()) {
+        if (toolsWindow.isMinimized()) toolsWindow.restore()
+        toolsWindow.focus()
+        return
+    }
+
+    toolsWindow = createWindow('tools', {
+        width: 800,
+        height: 600,
+        minWidth: 600,
+        minHeight: 500,
+        frame: false, // Frameless
+        transparent: false, // Standard window usually better not transparent for tools, but can be if needed. Let's stick to standard look for now.
+        // Actually, user design has rounded corners, so maybe transparent: true if we want custom border radius?
+        // But for a separate window, standard frame is often better for resize/move.
+        // Wait, user asked for "independent draggable window". 
+        // Our new UI has a custom title bar with "drag". So we need frame: false.
+        backgroundColor: '#ffffff', // Set background
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+        },
+    })
+
+    if (isProd) {
+        toolsWindow.loadURL('app://./tools')
+    } else {
+        const port = process.argv[2]
+        toolsWindow.loadURL(`http://localhost:${port}/tools`)
+    }
 })

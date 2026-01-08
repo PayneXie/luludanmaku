@@ -17,11 +17,12 @@ import Linkify from '@/components/Linkify' // 引入链接识别组件
 import LiveTimer from '@/components/LiveTimer' // 引入直播计时组件
 import FlipCounter from '@/components/FlipCounter' // 引入翻页计数器组件
 
+
 import level1 from '../public/images/level1.png'
 import level2 from '../public/images/level2.png'
 import level3 from '../public/images/level3.png'
 
-const TitleBar = ({ title, onToggleBorderless, isBorderlessActive }) => (
+const TitleBar = ({ title, onToggleBorderless, isBorderlessActive, onToggleAlwaysOnTop, isAlwaysOnTop }) => (
   <div style={{
     height: '32px',
     background: '#f8f9fa', // 将会被覆盖或合并，保持默认
@@ -42,6 +43,24 @@ const TitleBar = ({ title, onToggleBorderless, isBorderlessActive }) => (
         {title || 'Luludanmaku'}
       </div>
       <div style={{ display: 'flex', WebkitAppRegion: 'no-drag', height: '100%' }}>
+        {onToggleAlwaysOnTop && (
+          <button 
+            onClick={onToggleAlwaysOnTop}
+            title={isAlwaysOnTop ? "取消置顶" : "置顶窗口"}
+            className={styles['title-bar-btn']}
+            style={{ color: isAlwaysOnTop ? '#00a1d6' : 'currentColor' }}
+          >
+            {isAlwaysOnTop ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                    <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" />
+                </svg>
+            ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h2.8v-6H18v-2l-2-2z"></path>
+                </svg>
+            )}
+          </button>
+        )}
         {onToggleBorderless && (
           <button 
               onClick={onToggleBorderless} 
@@ -301,6 +320,13 @@ export default function HomePage() {
   // 调试状态
   const [showDebug, setShowDebug] = useState(false)
   
+  // 工具面板状态
+  // const [showTools, setShowTools] = useState(false) // Deprecated: Moved to independent window
+
+  const openToolsWindow = () => {
+      window.ipc.send('open-tools-window')
+  }
+
   // 窗口状态
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false)
   const [isBorderless, setIsBorderless] = useState(false) // 无边框模式状态
@@ -1282,6 +1308,8 @@ export default function HomePage() {
                   title={roomInfo ? roomInfo.title : `Luludanmaku - ${roomId}`} 
                   onToggleBorderless={toggleBorderlessMode} 
                   isBorderlessActive={isBorderless} 
+                  onToggleAlwaysOnTop={toggleAlwaysOnTop}
+                  isAlwaysOnTop={isAlwaysOnTop}
               />
               {/* 头部 */}
               <div className={styles['console-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', backgroundColor: '#fff', borderBottom: '1px solid #eee', fontFamily: '"Microsoft YaHei", sans-serif' }}>
@@ -1365,165 +1393,9 @@ export default function HomePage() {
                   </div>
                   
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {/* OBS 弹幕源配置按钮 */}
-                      <div style={{ position: 'relative' }} ref={obsHelpBtnRef}>
-                          <button
-                              title="OBS 弹幕源配置"
-                              style={{
-                                  padding: '6px',
-                                  cursor: 'pointer',
-                                  backgroundColor: showObsHelp ? 'rgba(0, 0, 0, 0.05)' : 'transparent',
-                                  color: showObsHelp ? '#333' : '#666',
-                                  border: '1px solid transparent',
-                                  borderRadius: '4px',
-                                  transition: 'all 0.2s',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                              }}
-                              onClick={() => setShowObsHelp(!showObsHelp)}
-                          >
-                              {/* Aperture Icon similar to OBS lens */}
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <circle cx="12" cy="12" r="10"></circle>
-                                  <line x1="14.31" y1="8" x2="20.05" y2="17.94"></line>
-                                  <line x1="9.69" y1="8" x2="21.17" y2="8"></line>
-                                  <line x1="7.38" y1="12" x2="13.12" y2="2.06"></line>
-                                  <line x1="9.69" y1="16" x2="3.95" y2="6.06"></line>
-                                  <line x1="14.31" y1="16" x2="2.83" y2="16"></line>
-                                  <line x1="16.62" y1="12" x2="10.88" y2="21.94"></line>
-                              </svg>
-                          </button>
 
-                          {/* OBS 配置模态框 */}
-                          {showObsHelp && typeof document !== 'undefined' && createPortal(
-                              <div
-                                  ref={obsHelpPanelRef}
-                                  style={{
-                                      position: 'fixed',
-                                      top: '105px',
-                                      right: '120px', // 稍微靠左一些
-                                      width: '320px',
-                                      background: '#fff',
-                                      border: '1px solid #ddd',
-                                      borderRadius: '6px',
-                                      boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                                      padding: '16px',
-                                      zIndex: 9999,
-                                      color: '#333',
-                                      textAlign: 'left',
-                                      fontFamily: '"Microsoft YaHei", sans-serif',
-                                      fontSize: '14px'
-                                  }}
-                              >
-                                  <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                          <circle cx="12" cy="12" r="10"></circle>
-                                          <line x1="14.31" y1="8" x2="20.05" y2="17.94"></line>
-                                          <line x1="9.69" y1="8" x2="21.17" y2="8"></line>
-                                          <line x1="7.38" y1="12" x2="13.12" y2="2.06"></line>
-                                          <line x1="9.69" y1="16" x2="3.95" y2="6.06"></line>
-                                          <line x1="14.31" y1="16" x2="2.83" y2="16"></line>
-                                          <line x1="16.62" y1="12" x2="10.88" y2="21.94"></line>
-                                      </svg>
-                                      OBS 弹幕源配置
-                                  </div>
 
-                                  {/* 链接区域 */}
-                                  <div style={{ marginBottom: '16px' }}>
-                                      <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#555' }}>正式链接 (用于直播)</div>
-                                      <div style={{ display: 'flex', gap: '8px' }}>
-                                          <input 
-                                              readOnly 
-                                              value="http://localhost:18888/obs_chat.html" 
-                                              style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #ddd', background: '#f9f9f9', fontSize: '12px', color: '#333' }} 
-                                              onClick={(e) => e.target.select()}
-                                          />
-                                          <CopyButton 
-                                              text="http://localhost:18888/obs_chat.html"
-                                              style={{ padding: '0 12px', cursor: 'pointer', background: '#00a1d6', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '12px' }}
-                                          />
-                                      </div>
-                                  </div>
 
-                                  <div style={{ marginBottom: '16px' }}>
-                                      <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#555' }}>测试链接 (用于预览样式)</div>
-                                      <div style={{ display: 'flex', gap: '8px' }}>
-                                          <input 
-                                              readOnly 
-                                              value="http://localhost:18888/test_css.html" 
-                                              style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #ddd', background: '#f9f9f9', fontSize: '12px', color: '#333' }} 
-                                              onClick={(e) => e.target.select()}
-                                          />
-                                          <CopyButton 
-                                              text="http://localhost:18888/test_css.html"
-                                              style={{ padding: '0 12px', cursor: 'pointer', background: '#f0f0f0', color: '#333', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }}
-                                          />
-                                      </div>
-                                  </div>
-
-                                  {/* 教学区域 */}
-                                  <div style={{ marginBottom: '16px', padding: '12px', background: '#f0f7ff', borderRadius: '6px', border: '1px solid #cce5ff' }}>
-                                      <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '8px', color: '#0056b3' }}>使用教学:</div>
-                                      <ol style={{ paddingLeft: '20px', margin: 0, fontSize: '12px', color: '#444', lineHeight: '1.6' }}>
-                                          <li>在 OBS 来源中点击 "+" -&gt; 选择 "浏览器"</li>
-                                          <li>取消勾选 "本地文件"</li>
-                                          <li>在 URL 栏粘贴上方 "正式链接"</li>
-                                          <li>建议尺寸: 宽 <strong>400</strong>, 高 <strong>800</strong></li>
-                                          <li>在 "自定义 CSS" 中清空内容 (可选)</li>
-                                      </ol>
-                                  </div>
-
-                                  {/* 预留配置项 */}
-                                  <div style={{ borderTop: '1px solid #eee', paddingTop: '12px' }}>
-                                      <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', color: '#999' }}>高级配置 (开发中)</div>
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', opacity: 0.5 }}>
-                                          <label style={{ display: 'flex', alignItems: 'center', fontSize: '12px', cursor: 'not-allowed' }}>
-                                              <input type="checkbox" disabled checked style={{ marginRight: '6px' }} /> 开启背景透明
-                                          </label>
-                                          <label style={{ display: 'flex', alignItems: 'center', fontSize: '12px', cursor: 'not-allowed' }}>
-                                              <input type="checkbox" disabled style={{ marginRight: '6px' }} /> 隐藏免费礼物
-                                          </label>
-                                          <label style={{ display: 'flex', alignItems: 'center', fontSize: '12px', cursor: 'not-allowed' }}>
-                                              <input type="checkbox" disabled style={{ marginRight: '6px' }} /> 仅显示付费留言 (SC/舰长)
-                                          </label>
-                                      </div>
-                                  </div>
-                              </div>,
-                              document.body
-                          )}
-                      </div>
-
-                      {/* 置顶按钮（图钉图标） */}
-                      <button 
-                        title={isAlwaysOnTop ? "取消置顶" : "置顶窗口"}
-                        style={{ 
-                            padding: '6px', 
-                            cursor: 'pointer',
-                            backgroundColor: isAlwaysOnTop ? 'rgba(0, 161, 214, 0.1)' : 'transparent',
-                            color: isAlwaysOnTop ? '#00a1d6' : '#666',
-                            border: '1px solid transparent',
-                            borderColor: isAlwaysOnTop ? '#00a1d6' : 'transparent',
-                            borderRadius: '4px',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
-                        onClick={toggleAlwaysOnTop}
-                      >
-                        {isAlwaysOnTop ? (
-                            // 已置顶（实心）
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                                <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" />
-                            </svg>
-                        ) : (
-                            // 未置顶（轮廓）
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h2.8v-6H18v-2l-2-2z"></path>
-                            </svg>
-                        )}
-                      </button>
 
                       {/* 调试按钮（Bug 图标） */}
                       <button 
@@ -1546,6 +1418,31 @@ export default function HomePage() {
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <rect x="8" y="9" width="8" height="8" rx="4"></rect>
                             <path d="M6 13h2M16 13h2M9 7l1 2M15 7l-1 2M8 17l-2 2M16 17l2 2"></path>
+                        </svg>
+                      </button>
+
+                      {/* 工具按钮（图表图标） */}
+                      <button 
+                        title="实用工具"
+                        style={{ 
+                            padding: '6px', 
+                            cursor: 'pointer',
+                            backgroundColor: 'transparent',
+                            color: '#666',
+                            border: '1px solid transparent',
+                            borderRadius: '4px',
+                            outline: 'none',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        onClick={openToolsWindow}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
                         </svg>
                       </button>
 
@@ -1686,6 +1583,9 @@ export default function HomePage() {
 
               {/* 调试面板 */}
               {showDebug && <DebugPanel onClose={() => setShowDebug(false)} />}
+
+              {/* 工具面板 (已移至独立窗口) */}
+              {/* {showTools && <ToolsPanel onClose={() => setShowTools(false)} />} */}
 
               {/* 主要内容 - 3 列 */}
               <div className={styles['console-body']} ref={containerRef}>
@@ -2298,6 +2198,135 @@ export default function HomePage() {
                       </div>
                   </div>
 
+              </div>
+
+              {/* OBS 弹幕源配置悬浮按钮 */}
+              <div style={{ position: 'absolute', bottom: '20px', right: '20px', zIndex: 2000 }} ref={obsHelpBtnRef}>
+                  <button
+                      title="OBS 弹幕源配置"
+                      style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          backgroundColor: '#fff',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                          border: '1px solid #eee',
+                          cursor: 'pointer',
+                          color: showObsHelp ? '#00a1d6' : '#666',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s',
+                          outline: 'none',
+                          padding: 0
+                      }}
+                      onClick={() => setShowObsHelp(!showObsHelp)}
+                      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                      <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="100%" height="100%" viewBox="0 0 50 50" fill="currentColor">
+                         <path d="M25,2C12.317,2,2,12.317,2,25s10.317,23,23,23s23-10.317,23-23S37.683,2,25,2z M43.765,34.373 c1.267-3.719-0.131-8.03-3.567-10.23c-4.024-2.576-9.374-1.401-11.95,2.623h0c-1.854,2.896-1.756,6.474-0.061,9.215 c-1.009,1.556-2.369,2.917-4.07,3.931c-5.4,3.22-12.356,1.952-16.225-2.779c-0.186-0.262-0.367-0.527-0.541-0.797 c2.62,3.273,7.404,4.213,11.166,2.09c4.161-2.348,5.631-7.625,3.283-11.786v0c-1.618-2.867-4.627-4.456-7.703-4.399 c-0.994-1.792-1.563-3.852-1.563-6.047c0-5.482,3.537-10.119,8.448-11.8c0.36-0.07,0.728-0.116,1.094-0.168 c-3.321,1.208-5.698,4.384-5.698,8.123c0,4.778,3.873,8.651,8.651,8.651c3.179,0,5.949-1.719,7.453-4.274 c2.197,0.015,4.417,0.594,6.427,1.825c5.056,3.094,7.173,9.294,5.39,14.713C44.137,33.643,43.948,34.007,43.765,34.373z"></path> 
+                     </svg>
+                  </button>
+
+                  {/* OBS 配置模态框 */}
+                  {showObsHelp && typeof document !== 'undefined' && createPortal(
+                      <div
+                          ref={obsHelpPanelRef}
+                          style={{
+                              position: 'fixed',
+                              bottom: '50px',
+                              right: '20px',
+                              width: '320px',
+                              background: '#fff',
+                              border: '1px solid #ddd',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+                              padding: '16px',
+                              zIndex: 9999,
+                              color: '#333',
+                              textAlign: 'left',
+                              fontFamily: '"Microsoft YaHei", sans-serif',
+                              fontSize: '14px',
+                              animation: 'fadeInUp 0.2s ease-out'
+                          }}
+                      >
+                          <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="12" cy="12" r="10"></circle>
+                                  <line x1="14.31" y1="8" x2="20.05" y2="17.94"></line>
+                                  <line x1="9.69" y1="8" x2="21.17" y2="8"></line>
+                                  <line x1="7.38" y1="12" x2="13.12" y2="2.06"></line>
+                                  <line x1="9.69" y1="16" x2="3.95" y2="6.06"></line>
+                                  <line x1="14.31" y1="16" x2="2.83" y2="16"></line>
+                                  <line x1="16.62" y1="12" x2="10.88" y2="21.94"></line>
+                              </svg>
+                              OBS 弹幕源配置
+                          </div>
+
+                          {/* 链接区域 */}
+                          <div style={{ marginBottom: '16px' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#555' }}>正式链接 (用于直播)</div>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                  <input 
+                                      readOnly 
+                                      value="http://localhost:18888/obs_chat.html" 
+                                      style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #ddd', background: '#f9f9f9', fontSize: '12px', color: '#333' }} 
+                                      onClick={(e) => e.target.select()}
+                                  />
+                                  <CopyButton 
+                                      text="http://localhost:18888/obs_chat.html"
+                                      style={{ padding: '0 12px', cursor: 'pointer', background: '#00a1d6', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '12px' }}
+                                  />
+                              </div>
+                          </div>
+
+                          <div style={{ marginBottom: '16px' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#555' }}>测试链接 (用于预览样式)</div>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                  <input 
+                                      readOnly 
+                                      value="http://localhost:18888/obs_chat_wechat.html" 
+                                      style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #ddd', background: '#f9f9f9', fontSize: '12px', color: '#333' }} 
+                                      onClick={(e) => e.target.select()}
+                                  />
+                                  <CopyButton 
+                                      text="http://localhost:18888/obs_chat_wechat.html"
+                                      style={{ padding: '0 12px', cursor: 'pointer', background: '#f0f0f0', color: '#333', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }}
+                                  />
+                              </div>
+                          </div>
+
+                          {/* 教学区域 */}
+                          <div style={{ marginBottom: '16px', padding: '12px', background: '#f0f7ff', borderRadius: '6px', border: '1px solid #cce5ff' }}>
+                              <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '8px', color: '#0056b3' }}>使用教学:</div>
+                              <ol style={{ paddingLeft: '20px', margin: 0, fontSize: '12px', color: '#444', lineHeight: '1.6' }}>
+                                  <li>在 OBS 来源中点击 "+" -&gt; 选择 "浏览器"</li>
+                                  <li>取消勾选 "本地文件"</li>
+                                  <li>在 URL 栏粘贴上方 "正式链接"</li>
+                                  <li>建议尺寸: 宽 <strong>400</strong>, 高 <strong>800</strong></li>
+                                  <li>在 "自定义 CSS" 中清空内容 (可选)</li>
+                              </ol>
+                          </div>
+
+                          {/* 预留配置项 */}
+                          <div style={{ borderTop: '1px solid #eee', paddingTop: '12px' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', color: '#999' }}>高级配置 (开发中)</div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', opacity: 0.5 }}>
+                                  <label style={{ display: 'flex', alignItems: 'center', fontSize: '12px', cursor: 'not-allowed' }}>
+                                      <input type="checkbox" disabled checked style={{ marginRight: '6px' }} /> 开启背景透明
+                                  </label>
+                                  <label style={{ display: 'flex', alignItems: 'center', fontSize: '12px', cursor: 'not-allowed' }}>
+                                      <input type="checkbox" disabled style={{ marginRight: '6px' }} /> 隐藏免费礼物
+                                  </label>
+                                  <label style={{ display: 'flex', alignItems: 'center', fontSize: '12px', cursor: 'not-allowed' }}>
+                                      <input type="checkbox" disabled style={{ marginRight: '6px' }} /> 仅显示付费留言 (SC/舰长)
+                                  </label>
+                              </div>
+                          </div>
+                      </div>,
+                      document.body
+                  )}
               </div>
               
               {/* 用户操作菜单 (Portal) */}

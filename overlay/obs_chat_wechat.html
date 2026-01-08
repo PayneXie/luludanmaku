@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="referrer" content="no-referrer" />
     <title>OBS Chat - WeChat Style</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,400;0,600;1,400;1,600&display=swap');
 
@@ -266,11 +265,6 @@
             align-items: center;
             gap: 6px;
         }
-        
-        /* Remove triangle pointer for small gift bubbles */
-        .bubble.variant-gift-small::before {
-            display: none !important;
-        }
 
         .gift-icon-small {
             width: 24px;
@@ -415,170 +409,38 @@
 <body>
 
 <div class="chat-container" id="chat-box">
-    <!-- WebSocket Messages will be injected here -->
+    <!-- Test Data will be injected here -->
 </div>
 
+<script src="mock_data.js"></script>
 <script>
-    // --- WebSocket Integration ---
-    const socket = io('http://localhost:18888', {
-        transports: ['websocket'],
-        reconnection: true
-    });
-
     const chatBox = document.getElementById('chat-box');
-    const DEFAULT_FACE = 'https://i0.hdslb.com/bfs/face/member/noface.jpg';
-    const SHOW_INTERACT = true; // Config: Show interact/follow messages?
-
-    // Message Queue
-    const messageQueue = [];
-    let isProcessing = false;
-
-    // --- Helper: Process Queue (Batching) ---
-    function processQueue() {
-        if (messageQueue.length === 0) {
-            isProcessing = false;
-            return;
-        }
-
-        isProcessing = true;
-        
-        // Process batch
-        const BATCH_SIZE = 5;
-        const batch = messageQueue.splice(0, BATCH_SIZE);
-        
-        batch.forEach(msg => {
-            const formattedMsg = parseBilibiliMessage(msg);
-            if (formattedMsg) {
-                addMessage(formattedMsg);
-            }
-        });
-
-        // Continue
-        requestAnimationFrame(processQueue);
+    
+    // Check if mock data is loaded
+    if (typeof MOCK_USERS === 'undefined') {
+        console.error('Mock data not loaded! Please ensure mock_data.js exists.');
     }
 
-    // --- Socket Listeners ---
-    socket.on('danmu-message', (msg) => {
-        messageQueue.push(msg);
-        if (!isProcessing) {
-            processQueue();
-        }
-    });
-
-    // --- Message Parser: Bilibili Protocol -> Internal Format ---
-    function parseBilibiliMessage(msg) {
-        try {
-            // 1. Normal Danmaku
-            if (msg.cmd === 'DANMU_MSG') {
-                const info = msg.info;
-                const uname = info[2][1];
-                const content = info[1];
-                const guardLevel = info[7];
-                const face = msg.face || DEFAULT_FACE;
-                const isEmoji = info[0][13] && info[0][13].url;
-                
-                // Construct HTML content for emoji/text
-                let htmlContent = content;
-                if (isEmoji) {
-                    htmlContent = `<img src="${info[0][13].url}" class="sticker">`;
-                }
-
-                return {
-                    type: 'chat',
-                    name: uname,
-                    avatar: face,
-                    content: htmlContent,
-                    guard: guardLevel
-                };
-            }
-
-            // 2. Super Chat
-            else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
-                const data = msg.data;
-                let level = 0;
-                if (data.price >= 2000) level = 5;
-                else if (data.price >= 1000) level = 4;
-                else if (data.price >= 500) level = 3;
-                else if (data.price >= 100) level = 2;
-                else if (data.price >= 50) level = 1;
-                
-                return {
-                    type: 'super-chat',
-                    name: data.user_info?.uname,
-                    avatar: data.user_info?.face,
-                    price: data.price,
-                    content: data.message,
-                    level: level
-                };
-            }
-
-            // 3. Gift
-            else if (msg.cmd === 'SEND_GIFT' || msg.cmd === 'COMBO_SEND') {
-                const data = msg.data;
-                
-                // Extract Gift Icon
-                let iconUrl = 'https://s1.hdslb.com/bfs/live/a02092c2866952402685764d0d36746f363c4739.png'; // Fallback
-                
-                // 1. Check data.gift_info (User mentioned this structure)
-                if (data.gift_info && (data.gift_info.webp || data.gift_info.img_basic)) {
-                    iconUrl = data.gift_info.webp || data.gift_info.img_basic;
-                }
-                // 2. Check batch_combo_send (Common in COMBO_SEND)
-                else if (data.batch_combo_send && data.batch_combo_send.gift_info && (data.batch_combo_send.gift_info.webp || data.batch_combo_send.gift_info.img_basic)) {
-                    iconUrl = data.batch_combo_send.gift_info.webp || data.batch_combo_send.gift_info.img_basic;
-                }
-
-                return {
-                    type: 'gift',
-                    name: data.uname,
-                    avatar: data.face,
-                    giftName: data.giftName,
-                    giftIcon: iconUrl,
-                    price: (data.price || 0) / 1000, 
-                    num: data.num || data.batch_combo_num || 1
-                };
-            }
-
-            // 4. Guard Buy
-            else if (msg.cmd === 'USER_TOAST_MSG') {
-                const data = msg.data;
-                return {
-                    type: 'guard-buy',
-                    name: data.username,
-                    avatar: data.face || DEFAULT_FACE,
-                    guardLevel: data.guard_level,
-                    num: data.num
-                };
-            }
-
-            // 5. Interact (Optional)
-            else if (msg.cmd === 'INTERACT_WORD' && SHOW_INTERACT) {
-                // ... logic for interact if needed ...
-                return null; // Skip for now to keep clean
-            }
-
-        } catch (e) {
-            console.error('Parse error:', e);
-            return null;
-        }
-        return null;
+    function getRandomItem(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
     }
 
-    // --- Render Logic (Same as WeChat Mock but using real data) ---
     function addMessage(msg) {
         const item = document.createElement('div');
-        item.className = 'chat-item'; 
+        item.className = 'chat-item'; // Animation is applied via CSS class
 
-        // 1. SuperChat
+        // Handle SuperChat Render Logic
         if (msg.type === 'super-chat') {
+            // SC has a completely different structure (Card)
             const scCard = document.createElement('div');
             scCard.className = `sc-card sc-level-${msg.level}`;
             
+            // Header
             const header = document.createElement('div');
             header.className = 'sc-header';
             
             const avatar = document.createElement('img');
-            avatar.src = msg.avatar || DEFAULT_FACE;
+            avatar.src = msg.avatar;
             avatar.className = 'sc-avatar';
             header.appendChild(avatar);
             
@@ -598,6 +460,7 @@
             header.appendChild(info);
             scCard.appendChild(header);
             
+            // Body
             const body = document.createElement('div');
             body.className = 'sc-body';
             body.innerText = msg.content;
@@ -609,21 +472,17 @@
             return;
         }
 
-        // 2. Gift
+        // Handle Gift Render Logic
         if (msg.type === 'gift') {
-            // Check if big gift ( > 29 RMB )
-            // Note: msg.price here needs to be RMB.
-            // If backend passes 1000 for 1 RMB, divide by 1000.
-            // Let's assume input price is RMB for now.
-            const totalRMB = (msg.price || 0) * msg.num;
-            const isBig = totalRMB > 29;
+            const isBig = msg.price * msg.num > 29;
             
             if (isBig) {
+                // Large Gift Card
                 const giftCard = document.createElement('div');
-                giftCard.className = `gift-card ${totalRMB > 99 ? 'price-high' : 'price-mid'}`;
+                giftCard.className = `gift-card ${msg.price * msg.num > 99 ? 'price-high' : 'price-mid'}`;
                 
                 const avatar = document.createElement('img');
-                avatar.src = msg.avatar || DEFAULT_FACE;
+                avatar.src = msg.avatar;
                 avatar.className = 'gift-card-avatar';
                 giftCard.appendChild(avatar);
                 
@@ -637,7 +496,8 @@
                 
                 const action = document.createElement('div');
                 action.className = 'gift-card-action';
-                action.innerHTML = `投喂 <span>${msg.giftName}</span> x${msg.num} <span style="font-size:0.9em; opacity:0.8; margin-left:4px;">(CN¥${totalRMB.toFixed(1)})</span>`;
+                const totalPrice = parseFloat((msg.price * msg.num).toFixed(1));
+                action.innerHTML = `投喂 <span>${msg.giftName}</span> x${msg.num} <span style="font-size:0.9em; opacity:0.8; margin-left:4px;">(CN¥${totalPrice})</span>`;
                 content.appendChild(action);
                 
                 giftCard.appendChild(content);
@@ -645,21 +505,21 @@
                 const icon = document.createElement('img');
                 icon.src = msg.giftIcon;
                 icon.className = 'gift-card-icon';
-                // Fallback icon
-                icon.onerror = () => { icon.style.display = 'none'; };
                 giftCard.appendChild(icon);
                 
                 item.appendChild(giftCard);
             } else {
-                // Small Gift Bubble
+                // Small Gift (Inline Bubble)
+                // Reuse Standard Avatar Layout
                 const avatarDiv = document.createElement('div');
                 avatarDiv.className = 'avatar';
-                avatarDiv.innerHTML = `<img src="${msg.avatar || DEFAULT_FACE}">`;
+                avatarDiv.innerHTML = `<img src="${msg.avatar}">`;
                 item.appendChild(avatarDiv);
                 
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'content';
                 
+                // Header
                 const header = document.createElement('div');
                 header.className = 'header';
                 const nameSpan = document.createElement('span');
@@ -668,13 +528,15 @@
                 header.appendChild(nameSpan);
                 contentDiv.appendChild(header);
                 
+                // Gift Bubble
                 const bubble = document.createElement('div');
                 bubble.className = 'bubble variant-gift-small';
+                const totalPrice = parseFloat((msg.price * msg.num).toFixed(1));
                 bubble.innerHTML = `
                     <span>投喂</span>
-                    <img src="${msg.giftIcon}" class="gift-icon-small" onerror="this.style.display='none'">
+                    <img src="${msg.giftIcon}" class="gift-icon-small">
                     <span>${msg.giftName} x${msg.num}</span>
-                    <span style="font-size:0.9em; opacity:0.6; margin-left:2px;">(CN¥${totalRMB.toFixed(1)})</span>
+                    <span style="font-size:0.9em; opacity:0.6; margin-left:2px;">(CN¥${totalPrice})</span>
                 `;
                 contentDiv.appendChild(bubble);
                 item.appendChild(contentDiv);
@@ -685,13 +547,13 @@
             return;
         }
 
-        // 3. Guard Buy
+        // Handle Guard Buy Logic
         if (msg.type === 'guard-buy') {
             const guardCard = document.createElement('div');
             guardCard.className = `guard-card level-${msg.guardLevel}`;
             
             const avatar = document.createElement('img');
-            avatar.src = msg.avatar || DEFAULT_FACE;
+            avatar.src = msg.avatar;
             avatar.className = 'guard-card-avatar';
             guardCard.appendChild(avatar);
             
@@ -712,6 +574,7 @@
             guardCard.appendChild(content);
             
             const icon = document.createElement('img');
+            // Use same CDN icons
             if (msg.guardLevel === 3) icon.src = 'https://i0.hdslb.com/bfs/activity-plat/static/20211222/627754775478985e330c25a90ec7baf0/icon-guard3.png@44w_44h.webp';
             else if (msg.guardLevel === 2) icon.src = 'https://i0.hdslb.com/bfs/activity-plat/static/20211222/627754775478985e330c25a90ec7baf0/icon-guard2.png@44w_44h.webp';
             else if (msg.guardLevel === 1) icon.src = 'https://i0.hdslb.com/bfs/activity-plat/static/20211222/627754775478985e330c25a90ec7baf0/icon-guard1.png@44w_44h.webp';
@@ -725,18 +588,18 @@
             return;
         }
 
-        // 4. Normal Chat
+        // Standard Message Logic (WeChat Bubble)
         // Avatar
         const avatarDiv = document.createElement('div');
         avatarDiv.className = 'avatar';
-        avatarDiv.innerHTML = `<img src="${msg.avatar || DEFAULT_FACE}">`;
+        avatarDiv.innerHTML = `<img src="${msg.avatar}">`;
         item.appendChild(avatarDiv);
 
         // Content
         const contentDiv = document.createElement('div');
         contentDiv.className = 'content';
 
-        // Header
+        // Header (Name + Guard Icon)
         const header = document.createElement('div');
         header.className = 'header';
         
@@ -746,13 +609,16 @@
         nameSpan.innerText = msg.name;
         header.appendChild(nameSpan);
 
-        // Guard Icon
+        // Render Guard Icon if exists
         if (msg.guard > 0) {
             const iconImg = document.createElement('img');
             iconImg.className = 'icon-guard';
+            
+            // Map guard level to online Bilibili CDN images
             if (msg.guard === 3) iconImg.src = 'https://i0.hdslb.com/bfs/activity-plat/static/20211222/627754775478985e330c25a90ec7baf0/icon-guard3.png@44w_44h.webp';
             else if (msg.guard === 2) iconImg.src = 'https://i0.hdslb.com/bfs/activity-plat/static/20211222/627754775478985e330c25a90ec7baf0/icon-guard2.png@44w_44h.webp';
             else if (msg.guard === 1) iconImg.src = 'https://i0.hdslb.com/bfs/activity-plat/static/20211222/627754775478985e330c25a90ec7baf0/icon-guard1.png@44w_44h.webp';
+            
             header.appendChild(iconImg);
         }
 
@@ -760,6 +626,7 @@
 
         // Bubble
         const bubble = document.createElement('div');
+        // Determine color based on guard level
         let bubbleClass = 'variant-white';
         if (msg.guard === 3) bubbleClass = 'variant-blue';
         if (msg.guard === 2) bubbleClass = 'variant-purple';
@@ -771,23 +638,99 @@
         contentDiv.appendChild(bubble);
         item.appendChild(contentDiv);
 
+        // Append to DOM
         chatBox.appendChild(item);
+
+        // Limit Messages
         cleanUpMessages();
     }
 
     function cleanUpMessages() {
         const children = Array.from(chatBox.children);
+        
+        // Remove items that are visibly off-screen (top)
         children.forEach(child => {
              const rect = child.getBoundingClientRect();
+             // If bottom of element is above the top of viewport (scrolled out)
              if (rect.bottom < 0) {
                  child.remove();
              }
         });
+
+        // Safety cap to prevent infinite growth if window is very tall
         if (children.length > 100) {
             children[0].remove();
         }
     }
 
+    // Start Dynamic Simulation
+    function startSimulation() {
+        // Add random messages loop
+        const loop = () => {
+            // Speed up: 200ms - 800ms delay
+            const delay = Math.random() * 600 + 200;
+            setTimeout(() => {
+                const rand = Math.random();
+                // Clone user to avoid modifying the original mock data
+                const user = { ...getRandomItem(MOCK_USERS) };
+                
+                // Apply random avatar from the large pool if available
+                if (typeof MOCK_AVATARS !== 'undefined' && MOCK_AVATARS.length > 0) {
+                    user.avatar = getRandomItem(MOCK_AVATARS);
+                }
+                
+                let msg;
+                if (rand > 0.9) { // 10% SC
+                    const scData = getRandomItem(MOCK_SC);
+                    msg = {
+                        type: 'super-chat',
+                        name: user.name,
+                        avatar: user.avatar,
+                        price: scData.price,
+                        content: scData.content,
+                        level: scData.level
+                    };
+                } else if (rand > 0.8) { // 10% Guard Buy
+                    const level = Math.floor(Math.random() * 3) + 1; // 1-3
+                    const num = Math.floor(Math.random() * 12) + 1;
+                    msg = {
+                        type: 'guard-buy',
+                        name: user.name,
+                        avatar: user.avatar,
+                        guardLevel: level,
+                        num: num
+                    };
+                } else if (rand > 0.65) { // 15% Gift
+                    const giftData = getRandomItem(MOCK_GIFTS);
+                    const num = Math.floor(Math.random() * 10) + 1; // 1-10
+                    msg = {
+                        type: 'gift',
+                        name: user.name,
+                        avatar: user.avatar,
+                        giftName: giftData.name,
+                        giftIcon: giftData.icon,
+                        price: giftData.price,
+                        num: num
+                    };
+                } else { // 65% Normal Chat
+                    const text = getRandomItem(MOCK_CONTENT);
+                    msg = {
+                        type: 'chat',
+                        name: user.name,
+                        guard: user.guard,
+                        avatar: user.avatar,
+                        content: text
+                    };
+                }
+                
+                addMessage(msg);
+                loop();
+            }, delay);
+        };
+        loop();
+    }
+    
+    startSimulation();
 </script>
 </body>
 </html>

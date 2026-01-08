@@ -129,7 +129,7 @@ export default function DebugPanel({ onClose }) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #eee' }}>
-        {['danmu', 'sc', 'gift', 'guard'].map(tab => (
+        {['danmu', 'sc', 'gift', 'guard', 'stress'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -140,10 +140,11 @@ export default function DebugPanel({ onClose }) {
               background: activeTab === tab ? 'white' : '#f1f3f5',
               cursor: 'pointer',
               fontWeight: activeTab === tab ? 'bold' : 'normal',
-              color: activeTab === tab ? '#228be6' : '#666'
+              color: activeTab === tab ? '#228be6' : '#666',
+              fontSize: tab === 'stress' ? '12px' : '14px'
             }}
           >
-            {tab === 'danmu' ? '弹幕' : tab === 'sc' ? 'SC' : tab === 'gift' ? '礼物' : '上舰'}
+            {tab === 'danmu' ? '弹幕' : tab === 'sc' ? 'SC' : tab === 'gift' ? '礼物' : tab === 'guard' ? '上舰' : '压测'}
           </button>
         ))}
       </div>
@@ -151,7 +152,8 @@ export default function DebugPanel({ onClose }) {
       {/* Body */}
       <div style={{ padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         
-        {/* Common: Username & UID */}
+        {/* Common: Username & UID (Hide for stress test) */}
+        {activeTab !== 'stress' && (
         <div style={{ display: 'flex', gap: '10px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 2, minWidth: 0 }}>
                 <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>用户名</label>
@@ -172,6 +174,54 @@ export default function DebugPanel({ onClose }) {
                 />
             </div>
         </div>
+        )}
+
+        {activeTab === 'stress' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                    警告: 压力测试可能导致软件卡顿或闪退，请谨慎使用。
+                </div>
+                
+                <button 
+                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'start-flood' })}
+                    style={{ padding: '8px', backgroundColor: '#e03131', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                    开始弹幕洪流 (1000条/秒)
+                </button>
+                
+                <button 
+                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'stop-flood' })}
+                    style={{ padding: '8px', backgroundColor: '#868e96', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                    停止弹幕洪流
+                </button>
+                
+                <div style={{ height: '1px', background: '#eee', margin: '4px 0' }}></div>
+                
+                <button 
+                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'flood-face' })}
+                    style={{ padding: '8px', backgroundColor: '#fd7e14', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                    泛洪头像缓存 (1000请求)
+                </button>
+                
+                <div style={{ height: '1px', background: '#eee', margin: '4px 0' }}></div>
+                
+                <button 
+                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-main-sync' })}
+                    style={{ padding: '8px', backgroundColor: '#000', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                    模拟主进程崩溃 (Uncaught)
+                </button>
+
+                <button 
+                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-main-async' })}
+                    style={{ padding: '8px', backgroundColor: '#343a40', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                    模拟主进程 Rejection
+                </button>
+            </div>
+        )}
 
         {activeTab === 'danmu' && (
             <>

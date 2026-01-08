@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 
+// Init logger in preload to catch renderer errors
+try {
+  const log = require('electron-log/renderer');
+  // Optional: redirect console to log
+  // Object.assign(console, log.functions);
+} catch (e) {
+  console.error('Failed to init electron-log in preload', e);
+}
+
 const handler = {
   send(channel: string, value: any) {
     ipcRenderer.send(channel, value)
