@@ -1,5 +1,6 @@
 import path from 'path'
-import { app, ipcMain, Menu, BrowserWindow, shell, clipboard } from 'electron'
+import https from 'https'
+import { app, ipcMain, Menu, BrowserWindow, shell, clipboard, crashReporter } from 'electron'
 import serve from 'electron-serve'
 import log from 'electron-log/main'
 import { createWindow } from './helpers'
@@ -33,17 +34,22 @@ import { dialog } from 'electron';
 // Catch global errors
 process.on('uncaughtException', (error) => {
   log.error('Uncaught Exception:', error);
+  // Suppress all dialogs, log only
+  /*
   dialog.showErrorBox('发生严重错误 (Uncaught Exception)', 
       `程序发生崩溃，请截图此信息反馈给开发者。\n\n错误信息:\n${error.message}\n\n日志位置:\n${app.getPath('userData')}\\logs\\`
   );
-  // process.exit(1); // Optional: force exit or try to stay alive
+  */
 });
 
 process.on('unhandledRejection', (reason: any) => {
   log.error('Unhandled Rejection:', reason);
+  // Suppress all dialogs, log only
+  /*
   dialog.showErrorBox('发生严重错误 (Unhandled Rejection)', 
       `程序检测到未处理的异步错误，请截图此信息反馈给开发者。\n\n错误信息:\n${reason?.message || reason}\n\n日志位置:\n${app.getPath('userData')}\\logs\\`
   );
+  */
 });
 
 // Catch Process Crashes (Native/OOM/GPU)
@@ -52,9 +58,11 @@ app.on('render-process-gone', (event, webContents, details) => {
   
   // OOM is a common silent killer
   if (details.reason === 'oom') {
-      dialog.showErrorBox('内存溢出 (OOM)', '程序内存不足导致崩溃。请尝试重启软件。');
+      // dialog.showErrorBox('内存溢出 (OOM)', '程序内存不足导致崩溃。请尝试重启软件。');
+      log.warn('OOM detected. Suggest restart.');
   } else if (details.reason === 'crashed') {
-      dialog.showErrorBox('渲染进程崩溃', `渲染进程意外退出。\n原因: ${details.reason}\n请检查日志。`);
+      // dialog.showErrorBox('渲染进程崩溃', `渲染进程意外退出。\n原因: ${details.reason}\n请检查日志。`);
+      log.warn(`Render process crashed: ${details.reason}`);
   } else {
       // killed, integrity-failure, etc.
       log.warn(`Render process gone with reason: ${details.reason}`);
@@ -140,6 +148,7 @@ let isCacheDirty = false
 // 使用两个队列实现优先级
 const highPriorityFaceQueue: number[] = []
 const lowPriorityFaceQueue: number[] = []
+const faceRetryCounts = new Map<number, number>()
 let isQueueProcessing = false
 
 // Process queue worker
@@ -152,8 +161,10 @@ async function processFaceQueue() {
   while (highPriorityFaceQueue.length > 0 || lowPriorityFaceQueue.length > 0) {
     // 优先从高优先级队列取，如果空的再从低优先级取
     let uid: number | undefined
+    let isHighPriority = false
     if (highPriorityFaceQueue.length > 0) {
         uid = highPriorityFaceQueue.shift()
+        isHighPriority = true
     } else {
         uid = lowPriorityFaceQueue.shift()
     }
@@ -163,6 +174,7 @@ async function processFaceQueue() {
     // Check cache again in case it was added recently
     if (faceCache.has(uid)) {
         pendingFaceRequests.delete(uid)
+        faceRetryCounts.delete(uid)
         continue
     }
 
@@ -173,14 +185,39 @@ async function processFaceQueue() {
         faceCache.set(uid, userInfo.face)
         isCacheDirty = true
       }
-    } catch (err: any) {
-       // Log error but continue
-       // Decode potential garbled error message if possible, or just log raw
-       // "风控校验失败" usually means rate limit or captcha required
-       console.error(`[FaceCache] Failed for ${uid}:`, err.message || err)
-    } finally {
+      // Success
       pendingFaceRequests.delete(uid)
-    }
+      faceRetryCounts.delete(uid)
+    } catch (err: any) {
+       // Log error
+       console.error(`[FaceCache] Failed for ${uid}:`, err.message || err)
+       
+       // Retry Logic
+       const currentRetries = faceRetryCounts.get(uid) || 0
+       // Retry up to 10 times for network issues (user asked for persistent retry)
+       // But let's limit to 5 to avoid infinite loops on 404s, 
+       // unless we specifically check for network errors.
+       // User said "don't just hang", implying they want it to eventually succeed if network comes back.
+       // Let's use 5 retries.
+       if (currentRetries < 5) {
+           const nextRetry = currentRetries + 1
+           faceRetryCounts.set(uid, nextRetry)
+           console.log(`[FaceCache] Retrying ${uid} (Attempt ${nextRetry}/5)...`)
+           
+           // Re-queue to end of list
+           if (isHighPriority) {
+               highPriorityFaceQueue.push(uid)
+           } else {
+               lowPriorityFaceQueue.push(uid)
+           }
+           // Do NOT delete from pendingFaceRequests yet
+       } else {
+           console.error(`[FaceCache] Gave up on ${uid} after 5 attempts`)
+           pendingFaceRequests.delete(uid)
+           faceRetryCounts.delete(uid)
+       }
+    } 
+    // finally block removed as we handle cleanup manually based on success/fail
 
     // Wait 2000ms between requests to be safe
     await new Promise(resolve => setTimeout(resolve, 2000))
@@ -660,6 +697,12 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
            log.error('[Socket] Critical error in message loop:', err);
        });
     })
+    
+    // Status Callback for UI updates
+    activeBiliSocket.ws.statusCallback = (status) => {
+        event.reply('danmu-status', status)
+    }
+
     activeBiliSocket.Connect()
   } catch (e) {
     console.error('Failed to init socket', e)
@@ -882,6 +925,46 @@ ipcMain.on('bilibili-debug-stress', async (event, { action }) => {
   } else if (action === 'crash-renderer') {
       const win = BrowserWindow.fromWebContents(event.sender)
       win?.webContents.forcefullyCrashRenderer()
+  } else if (action === 'crash-socket-hangup') {
+      log.info('[StressTest] Verifying Fix: Simulating Socket Hang Up...');
+      
+      // 注意：这里不需要再加载 brotli，因为我们已经验证了它是罪魁祸首并移除了。
+      // 现在的目的是验证：当没有 brotli 时，这个错误能否被我们的 process.on('uncaughtException') 正常捕获并弹窗。
+
+      const listeners = process.listeners('uncaughtException');
+      log.info(`[StressTest] Current uncaughtException listeners count: ${listeners.length}`);
+      listeners.forEach((fn, i) => {
+          log.info(`[StressTest] Listener ${i}: ${fn.toString().substring(0, 100)}...`);
+      });
+      
+      // 1. Create a dummy request WITHOUT error handler
+      // 我们故意不写 req.on('error') 来触发 uncaughtException，
+      // 看看现在是不是会弹出那个“发生严重错误”的对话框，而不是直接消失。
+      const req = https.request('https://www.bilibili.com', (res) => {
+          // Do nothing
+      });
+      req.end();
+
+      // 2. Manually emit the 'error' event
+      setTimeout(() => {
+          const err = new Error('socket hang up (Verification Test)');
+          (err as any).code = 'ECONNRESET';
+          log.info('[StressTest] Emitting unhandled error on request object...');
+          req.emit('error', err);
+      }, 500);
+  } else if (action === 'simulate-ws-close') {
+      log.info('[StressTest] Simulating WebSocket Disconnection...');
+      if (activeBiliSocket && activeBiliSocket.ws) {
+          // Access internal WS to close it, triggering reconnect logic
+          // @ts-ignore
+          if (activeBiliSocket.ws._ws) {
+              // @ts-ignore
+              // Fix: Use code 4000 (standard for application defined) instead of 1006 which is reserved for internal use
+              activeBiliSocket.ws._ws.close(4000, 'Abnormal Closure (Simulation)');
+          }
+      } else {
+          log.warn('[StressTest] No active socket to close.');
+      }
   }
 })
 

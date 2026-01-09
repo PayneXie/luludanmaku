@@ -60,6 +60,14 @@ export function initOverlayServer() {
   server.listen(PORT, () => {
     console.log(`[Overlay Server] Running on http://localhost:${PORT}`)
   })
+  
+  server.on('error', (e: any) => {
+    if (e.code === 'EADDRINUSE') {
+      console.log(`[Overlay Server] Port ${PORT} is busy, server overlay disabled.`)
+    } else {
+      console.error('[Overlay Server] Error:', e)
+    }
+  })
 }
 
 /**

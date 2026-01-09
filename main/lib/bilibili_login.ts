@@ -101,6 +101,9 @@ export function CheckQrCodeStatus(oauthKey: string): Promise<CheckQrResult> {
         reject(err)
       })
     })
+    statusReq.on('error', (err) => {
+        reject(err)
+    })
     statusReq.end()
   })
 }
@@ -217,13 +220,14 @@ export function GetDanmuInfo(cookies: BiliCookies | null, roomId: number): Promi
         reject(err)
       })
     })
+    req.on('error', (err) => reject(err))
     req.end()
   })
 }
 
 export function GetRoomInfo(roomId: number): Promise<any> {
   return new Promise((resolve, reject) => {
-    https.get(`https://api.live.bilibili.com/room/v1/Room/get_info?room_id=${roomId}`, (res) => {
+    const req = https.get(`https://api.live.bilibili.com/room/v1/Room/get_info?room_id=${roomId}`, (res) => {
       let data = ''
       res.on('data', (chunk) => { data += chunk })
       res.on('end', () => {
@@ -240,6 +244,7 @@ export function GetRoomInfo(roomId: number): Promise<any> {
       })
       res.on('error', (err) => reject(err))
     })
+    req.on('error', (err) => reject(err))
   })
 }
 
@@ -283,6 +288,7 @@ export function GetSilentUserList(cookies: BiliCookies, roomId: number): Promise
       })
     })
     
+    req.on('error', (err) => reject(err))
     req.write(postData)
     req.end()
   })
@@ -384,6 +390,7 @@ export function GetBiliUserInfo(cookies: BiliCookies, mid: number): Promise<any>
         reject(err)
       })
     })
+    req.on('error', (err) => reject(err))
     req.end()
   })
 }
@@ -425,6 +432,7 @@ export function GetUserInfo(cookies: BiliCookies): Promise<any> {
         reject(err)
       })
     })
+    req.on('error', (err) => reject(err))
     req.end()
   })
 }

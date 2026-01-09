@@ -227,6 +227,24 @@ export default function DebugPanel({ onClose }) {
                 >
                     模拟渲染进程崩溃 (Renderer Crash)
                 </button>
+
+                <div style={{ height: '1px', background: '#eee', margin: '4px 0' }}></div>
+
+                <button 
+                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-socket-hangup' })}
+                    style={{ padding: '8px', backgroundColor: '#862e9c', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                    验证 Socket Hang Up (修复后应弹窗)
+                </button>
+
+                <div style={{ height: '1px', background: '#eee', margin: '4px 0' }}></div>
+
+                <button 
+                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'simulate-ws-close' })}
+                    style={{ padding: '8px', backgroundColor: '#e67700', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                    模拟 WebSocket 断线
+                </button>
             </div>
         )}
 

@@ -127,6 +127,7 @@ export default function HomePage() {
   // 弹幕状态
   const [roomId, setRoomId] = useState('')
   const [danmuStatus, setDanmuStatus] = useState('Disconnected')
+  const [showConsole, setShowConsole] = useState(false)
   
   // 数据列表拆分
   const [danmuList, setDanmuList] = useState([]) // 普通弹幕 + 系统消息 (限制长度)
@@ -781,6 +782,7 @@ export default function HomePage() {
       }
       
       // 通过主进程连接
+      setShowConsole(true)
       window.ipc.send('bilibili-connect-socket', wsInfo)
       
       saveToHistory(roomId)
@@ -796,6 +798,15 @@ export default function HomePage() {
       // 移除旧监听器以避免重复
       window.ipc.removeAllListeners('danmu-message')
       window.ipc.on('danmu-message', msgHandler)
+      
+      window.ipc.removeAllListeners('danmu-status')
+      window.ipc.on('danmu-status', (event, status) => {
+          setDanmuStatus(status)
+          // 如果是错误，记录到系统消息，但不弹窗
+          if (status.includes('Error') || status.includes('Failed') || status.includes('Closed')) {
+              addSystemMessage(`[连接状态] ${status}`)
+          }
+      })
       
       setDanmuStatus('Connected (Main Process)')
       
@@ -833,6 +844,7 @@ export default function HomePage() {
       }
 
       const errText = 'Connection Failed: ' + (e.message || 'Unknown error')
+      // 如果是网络连接失败，不要退出登录，保持当前页面状态
       setDanmuStatus(errText)
       addSystemMessage(errText)
     }
@@ -864,6 +876,7 @@ export default function HomePage() {
 
   const initLogin = async () => {
     try {
+      setShowConsole(false)
       stopPolling() // 清除现有的定时器
       setStatus('正在获取二维码...')
       const { url, oauthKey } = await getQrCode()
@@ -958,6 +971,40 @@ export default function HomePage() {
   }, [danmuList, isAlwaysOnTop, danmuFilter])
 
   if (!loggedIn) {
+      // 只有非重连状态才显示登录页
+      // 并且只有当状态不是 "Connecting" 时才显示登录页（避免初始化时的闪烁）
+      // 其实最准确的是看 userInfo 是否存在
+      // 注意：danmuStatus 在断线时可能会变成 "Disconnected" 或其他错误信息
+      // 我们需要一个更明确的标志来决定是否显示登录页
+      
+      // 逻辑修正：只要 userInfo 存在，就不应该显示登录页，除非显式退出了。
+      // 如果 loggedIn 为 false，但 userInfo 还在（可能是状态同步问题），或者处于重连中，就不显示登录页。
+      // 但是 loggedIn 状态就是用来控制这个的。
+      // 问题在于：断线重连时，loggedIn 是否被重置了？
+      // 检查代码发现：只有在 -101 错误或手动退出时，loggedIn 才设为 false。
+      // 模拟断线时，loggedIn 应该还是 true。
+      
+      // 为什么用户说“弹回进房页面”？
+      // 如果 loggedIn 为 true，代码会执行到下面的 return (Main UI)。
+      // 如果弹回了，说明 loggedIn 变成了 false。
+      // 或者是 danmuStatus 变成了其他值，导致下面的主界面渲染逻辑没有命中？
+      
+      // 下面的主界面渲染逻辑是：if (danmuStatus.startsWith('Connected') || danmuStatus.startsWith('Reconnecting'))
+      // 如果 danmuStatus 变成了 "Disconnected"（例如模拟断线后还没开始重连的那一瞬间），
+      // 既不满足上面的 if，也不满足 loggedIn 的 if（假设 loggedIn 为 true），
+      // 那么它会渲染什么？
+      // 它会继续执行到最后的 return (房间选择页)！
+      
+      // 找到了！
+      // 如果 loggedIn = true，但 danmuStatus 是 "Disconnected"，组件会渲染最后的“房间选择页”。
+      // 这就是用户看到的“弹回进房页面”。
+      
+      // 修复方案：
+      // 如果 loggedIn = true，即使 danmuStatus 是 Disconnected，也应该保持在主界面（或者显示重连遮罩），而不是退回房间选择。
+      // 或者，我们应该让 Disconnected 状态也渲染主界面，只是加遮罩。
+      
+      // 让我们修改主界面的渲染条件。
+      
       return (
         <React.Fragment>
           <Head>
@@ -1017,8 +1064,8 @@ export default function HomePage() {
   // 安全获取图标 URL 的辅助函数
   // (移至 DanmuListItems.jsx)
 
-  // 已连接视图
-  if (danmuStatus.startsWith('Connected')) {
+  // 已连接视图 (只要 loggedIn 且 showConsole 为 true，就应该显示主界面，状态只决定遮罩)
+  if (showConsole) {
       if (isBorderless) {
           return (
             <React.Fragment>
@@ -1033,6 +1080,13 @@ export default function HomePage() {
                   font-family: "Microsoft YaHei", sans-serif;
                   background-color: transparent;
                 }
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                .spinner {
+                    animation: spin 1s linear infinite;
+                }
               `}</style>
               <div style={{
                   height: '100vh',
@@ -1043,6 +1097,44 @@ export default function HomePage() {
                   flexDirection: 'column',
                   position: 'relative'
               }}>
+                  {/* 断线重连遮罩 */}
+                  {!danmuStatus.startsWith('Connected') && (
+                      <div style={{
+                          position: 'absolute',
+                          top: 0, left: 0, right: 0, bottom: 0,
+                          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                          color: '#fff',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          zIndex: 2000,
+                          fontSize: '14px',
+                          pointerEvents: 'auto' // 允许点击按钮
+                      }}>
+                          <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <svg className="spinner" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '12px', color: '#fff' }}>
+                                  <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                              </svg>
+                              <div>{danmuStatus === 'Disconnected' ? '网络波动断线重连中...' : danmuStatus}</div>
+                          </div>
+                          <button 
+                              onClick={() => setShowConsole(false)}
+                              style={{
+                                  padding: '4px 8px',
+                                  fontSize: '12px',
+                                  background: 'rgba(255,255,255,0.2)',
+                                  border: '1px solid rgba(255,255,255,0.5)',
+                                  color: '#fff',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                              }}
+                          >
+                              返回房间选择
+                          </button>
+                      </div>
+                  )}
+
                   {/* 顶部拖拽区 */}
                   <div style={{
                       height: '24px',
@@ -1313,6 +1405,13 @@ export default function HomePage() {
               font-family: "Microsoft YaHei", sans-serif;
               background-color: transparent;
             }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            .spinner {
+                animation: spin 1s linear infinite;
+            }
           `}</style>
           <div 
             className={styles['console-container']}
@@ -1335,6 +1434,53 @@ export default function HomePage() {
                   onToggleAlwaysOnTop={toggleAlwaysOnTop}
                   isAlwaysOnTop={isAlwaysOnTop}
               />
+              
+              {/* 断线重连遮罩 (主界面) */}
+              {!danmuStatus.startsWith('Connected') && (
+                  <div style={{
+                      position: 'absolute',
+                      top: '32px', // Below TitleBar
+                      left: 0, right: 0, bottom: 0,
+                      backgroundColor: 'rgba(255, 255, 255, 0.8)', // 白色半透明
+                      backdropFilter: 'blur(2px)',
+                      color: '#333',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 2000,
+                      fontSize: '14px'
+                  }}>
+                      <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <svg className="spinner" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#00a1d6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '12px' }}>
+                              <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                          </svg>
+                          <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
+                              {danmuStatus === 'Disconnected' ? '网络波动断线重连中...' : danmuStatus}
+                          </div>
+                      </div>
+                      
+                      <button 
+                          onClick={() => setShowConsole(false)}
+                          style={{
+                              padding: '6px 16px',
+                              fontSize: '13px',
+                              background: '#fff',
+                              border: '1px solid #d9d9d9',
+                              color: '#666',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 0 rgba(0,0,0,0.02)',
+                              transition: 'all 0.3s'
+                          }}
+                          onMouseEnter={e => { e.target.style.color = '#40a9ff'; e.target.style.borderColor = '#40a9ff'; }}
+                          onMouseLeave={e => { e.target.style.color = '#666'; e.target.style.borderColor = '#d9d9d9'; }}
+                      >
+                          返回房间选择
+                      </button>
+                  </div>
+              )}
+
               {/* 头部 */}
               <div className={styles['console-header']} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', backgroundColor: '#fff', borderBottom: '1px solid #eee', fontFamily: '"Microsoft YaHei", sans-serif' }}>
                   <div className={styles['room-info']} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>

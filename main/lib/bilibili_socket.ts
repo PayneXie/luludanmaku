@@ -1,6 +1,6 @@
 import WebSocket from 'ws'
 import pako from 'pako'
-import brotli from 'brotli'
+import zlib from 'zlib'
 
 export type WsInfo = {
   server: string
@@ -135,10 +135,7 @@ class BiliWsMessage {
               const body_buffer = Buffer.from(
                 this._buffer.slice(result.headerLen, result.packetLen)
               )
-              const decompressed_body = brotli.decompress(
-                body_buffer,
-                result.packetLen
-              )
+              const decompressed_body = zlib.brotliDecompressSync(body_buffer)
               // console.log('Brotli decompressed size:', decompressed_body.length)
               result.body = this.parseDecompressed(decompressed_body)
             } catch (e) {
@@ -236,11 +233,18 @@ export class BiliWebSocket {
     if (this._is_manual_close) {
       return
     }
+    // Notify renderer about reconnection
+    // Assuming we can emit an event or callback here, but we don't have direct access to webContents.
+    // Ideally, BiliWebSocket should emit events.
+    console.log('Reconnecting to room websocket')
+    if (this.ws && this.ws.statusCallback) {
+        this.ws.statusCallback('Reconnecting...')
+    }
+
     setTimeout(() => {
       if (this._is_manual_close) {
         return
       }
-      console.log('Reconnecting to room websocket')
       this.Connect()
     }, 5000)
   }
@@ -252,6 +256,7 @@ class BiliInternalWebSocket {
   private _heartbeat_task: any // NodeJS.Timeout
   public msg_handler: ((packet: PackResult) => void) | null
   public close_handler: (() => void) | null
+  public statusCallback: ((status: string) => void) | null
 
   constructor(ws_info: WsInfo) {
     this._ws_info = ws_info
@@ -259,16 +264,19 @@ class BiliInternalWebSocket {
     this._heartbeat_task = null
     this.msg_handler = null
     this.close_handler = null
+    this.statusCallback = null
   }
 
   Connect() {
     console.log('Connecting to room websocket', this._ws_info.room_id)
     console.log('Server URL:', this._ws_info.server) // Debug
+    if (this.statusCallback) this.statusCallback('Connecting...')
     this.Disconnect()
 
     this._ws = new WebSocket(this._ws_info.server)
     
     this._ws.on('open', () => {
+      if (this.statusCallback) this.statusCallback('Connected')
       // Prepare auth info
       const auth_info = {
         uid: Number(this._ws_info.uid),
