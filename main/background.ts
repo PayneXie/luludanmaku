@@ -845,12 +845,13 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
   const uid = Number(data.uid) || 12345
   if (type === 'danmu') {
      const senderGuardLevel = Number(data.senderGuardLevel) || 0
+     const timestamp = Math.floor(Date.now() / 1000)
      const mockMsg = {
         cmd: 'DANMU_MSG',
         info: [
            // info[0]: [0, 1, 25, 16777215, 1704380000, 0, 0, "", 0, 0, 0, 0, 0, {}, {}, { ... }]
            [
-             0, 1, 25, 16777215, 1704380000, 0, 0, "", 0, 0, 0, 0, 0, 
+             0, 1, 25, 16777215, timestamp, 0, 0, "", 0, 0, 0, 0, 0, 
              {}, // 13: emoji_content (null or object)
              {}, // 14: real_name?
              { "user_hash": "0", "log_id": "0", "reply_uname": "" } // 15: extra_info
@@ -860,7 +861,7 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
            [5, "TestMedal", "TestAnchor", 123, 0x5896de, "", 0, 6809855, 2951253, 10329087, senderGuardLevel, 1], // Medal info (index 3) -> info[3][10] is guard level
            [0,0,9868950,">50000"], 
            ["title-531-1", "title-531-1"], 
-           0, 0, null, { "ts": 1704380000, "ct": "A76F3C90" }, 0, 0, null, null, 0, 210
+           0, 0, null, { "ts": timestamp, "ct": "A76F3C90" }, 0, 0, null, null, 0, 210
         ]
      }
      // Fix: The guard level is primarily at info[7] for the current room
@@ -873,10 +874,11 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
      }
   } else if (type === 'sc') {
     const price = Number(data.price) || 30
+    const timestamp = Math.floor(Date.now() / 1000)
     const mockSC = {
         cmd: 'SUPER_CHAT_MESSAGE',
         data: {
-            id: Math.floor(Math.random() * 100000),
+            id: String(Date.now()) + Math.floor(Math.random() * 1000),
             uid: uid,
             price: price,
             rate: 1000,
@@ -887,7 +889,7 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
             background_icon: "",
             background_price_color: "#7497CD",
             background_bottom_color: "#2A60B2",
-            ts: 1704380000,
+            ts: timestamp,
             token: "token",
             medal_info: null,
             user_info: {
@@ -905,8 +907,8 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
                 user_level: 10
             },
             time: 60,
-            start_time: 1704380000,
-            end_time: 1704380060,
+            start_time: timestamp,
+            end_time: timestamp + 60,
             gift: { gift_id: 12000, gift_name: "醒目留言", num: 1 }
         },
         roomid: 123
@@ -921,6 +923,8 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
     const num = Number(data.num) || 1
     // Use a random ID to avoid collision with real gift config (which might force coin_type to silver)
     const randomGiftId = 99000 + Math.floor(Math.random() * 1000)
+    const timestamp = Math.floor(Date.now() / 1000)
+    const tid = String(Date.now()) + Math.floor(Math.random() * 1000)
     
     const mockGift = {
         cmd: 'SEND_GIFT',
@@ -960,7 +964,7 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
             price: giftPrice,
             rcost: 22756804,
             remain: 0,
-            rnd: "1704380000",
+            rnd: String(timestamp),
             send_master: null,
             silver: 0,
             super: 0,
@@ -968,8 +972,8 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
             super_gift_num: 1,
             svga_resources: "",
             tag_image: "",
-            tid: "1704380000",
-            timestamp: Math.floor(Date.now() / 1000),
+            tid: tid,
+            timestamp: timestamp,
             top_list: null,
             total_coin: giftPrice * num,
             uid: uid,
@@ -1012,7 +1016,7 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
             price: price,
             unit: "月",
             start_time: Math.floor(Date.now() / 1000),
-            payflow_id: "mock_payflow_" + Date.now(),
+            payflow_id: "mock_payflow_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
             roomid: 123,
             face: face // Inject face
         }

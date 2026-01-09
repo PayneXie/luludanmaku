@@ -336,10 +336,16 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
 
     // Small Gift
     if (valueRMB <= 29) {
+        const guardLevel = msg.sender.medal_info ? msg.sender.medal_info.guard_level : 0
+        let unameColor = '#333'
+        if (guardLevel === 3) unameColor = '#00a1d6'
+        if (guardLevel === 2) unameColor = '#E040FB'
+        if (guardLevel === 1) unameColor = '#FF3232'
+
         return (
              <div 
                className={styles['danmu-item']} 
-               style={{ display: 'flex', alignItems: 'center', padding: '4px 8px', flexWrap: 'wrap', gap: '4px', backgroundColor: 'rgba(0,0,0,0.3)', color: '#fff', ...readStyle }}
+               style={{ display: 'flex', alignItems: 'center', padding: '4px 8px', flexWrap: 'wrap', gap: '4px', backgroundColor: 'transparent', ...readStyle }}
                onDoubleClick={() => onToggleRead(item.id)}
              >
                  <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
@@ -368,7 +374,7 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
                      )}
                      
                      <span 
-                         style={{ color: '#fff', fontWeight: 'bold', marginRight: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                         style={{ color: unameColor, fontWeight: 'bold', marginRight: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}
                          onClick={(e) => onUserClick(e, msg.sender)}
                          data-user-action-trigger="true"
                      >
@@ -377,7 +383,7 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
                  </div>
                  
                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
-                     <span style={{ color: '#ccc', marginRight: '4px', whiteSpace: 'nowrap' }}>投喂</span>
+                     <span style={{ color: '#999', marginRight: '4px', whiteSpace: 'nowrap' }}>投喂</span>
 
                      {giftImg && (
                          <img 
