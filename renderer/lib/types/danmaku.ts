@@ -93,7 +93,6 @@ export class DanmuMessage {
 
 export class GiftMessage {
   id: string
-  canonicalId: string
   room: number
   gift_info: GiftType
   sender: Sender
@@ -114,17 +113,12 @@ export class GiftMessage {
     this.action = body.data.action
     this.num = body.data.num
     this.timestamp = body.data.timestamp
-    this.id = body.data.rnd
-    
-    // Generate Canonical ID consistent with cloud logic
-    const data = body.data
-    this.canonicalId = data.batch_combo_id || `gift_${data.uid}_${data.timestamp}_${data.giftId}`
+    this.id = body.data.tid
   }
 }
 
 export class GuardMessage {
   id: string
-  canonicalId: string
   room: number
   sender: Sender
   num: number
@@ -136,9 +130,6 @@ export class GuardMessage {
   constructor(body: any) {
     this.sender = new Sender()
     this.id = body.data.payflow_id
-    const data = body.data
-    // Generate Canonical ID consistent with cloud logic
-    this.canonicalId = data.payflow_id || `guard_${data.uid}_${data.start_time}`
 
     this.room = body.roomid || 0 // Sometimes roomid might be missing or in a different place, safe fallback
     
@@ -158,7 +149,6 @@ export class GuardMessage {
 
 export class SuperChatMessage {
   id: string
-  canonicalId: string
   room: number
   sender: Sender
   message: string
@@ -168,8 +158,6 @@ export class SuperChatMessage {
   constructor(body: any) {
     this.sender = new Sender()
     this.id = body.data.id.toString()
-    // Generate Canonical ID consistent with cloud logic
-    this.canonicalId = this.id
     
     this.room = body.roomid
     this.sender.uid = body.data.uid

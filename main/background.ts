@@ -317,11 +317,84 @@ async function resolveUserFace(uid: number, priority: 'high' | 'low' = 'low'): P
   return null
 }
 
+// Listen for logs from renderer
+ipcMain.on('renderer-log', (event, level, message, ...args) => {
+    if (level === 'error') {
+        log.error(`[Renderer] ${message}`, ...args)
+    } else if (level === 'warn') {
+        log.warn(`[Renderer] ${message}`, ...args)
+    } else {
+        log.info(`[Renderer] ${message}`, ...args)
+    }
+})
+
+// Proxy request to avoid CORS
+ipcMain.handle('proxy-request', async (event, url, options = {}) => {
+    try {
+        log.info(`[ProxyRequest] Fetching: ${url}`)
+        
+        // Use net module from electron (similar to Node fetch but works better in Electron context)
+        const { net } = require('electron')
+        
+        return new Promise((resolve, reject) => {
+            const request = net.request({
+                method: options.method || 'GET',
+                url: url,
+            })
+            
+            if (options.headers) {
+                for (const [key, value] of Object.entries(options.headers)) {
+                    request.setHeader(key, value as string)
+                }
+            }
+            // Add default User-Agent if not present
+            if (!request.getHeader('User-Agent')) {
+                request.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+            }
+
+            request.on('response', (response) => {
+                let data = ''
+                response.on('data', (chunk) => {
+                    data += chunk.toString()
+                })
+                response.on('end', () => {
+                    if (response.statusCode >= 200 && response.statusCode < 300) {
+                        try {
+                            const json = JSON.parse(data)
+                            log.info(`[ProxyRequest] Success, data length: ${Array.isArray(json) ? json.length : 'Object'}`)
+                            resolve(json)
+                        } catch (e) {
+                            reject(new Error(`Failed to parse JSON: ${e.message}`))
+                        }
+                    } else {
+                         log.warn(`[ProxyRequest] Failed: ${response.statusCode}`)
+                         reject(new Error(`HTTP ${response.statusCode}`))
+                    }
+                })
+                response.on('error', (error) => {
+                    reject(error)
+                })
+            })
+            
+            request.on('error', (error) => {
+                 log.error(`[ProxyRequest] Request Error:`, error)
+                 reject(error)
+            })
+
+            request.end()
+        })
+
+    } catch (error) {
+        log.error(`[ProxyRequest] Error:`, error)
+        throw error
+    }
+})
+
 if (isProd) {
-    serve({ directory: 'app' })
-  } else {
-    app.setPath('userData', `${app.getPath('userData')} (development)`)
-  }
+  serve({ directory: 'app' })
+} else {
+  app.setPath('userData', `${app.getPath('userData')} (development)`)
+}
 
   // Start Overlay Server
   initOverlayServer()

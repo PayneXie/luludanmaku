@@ -172,6 +172,7 @@ export const ScItem = React.memo(({ item, readMessages, onUserClick, onToggleRea
     
     const isRead = readMessages.has(item.id)
     const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
+    const isCloud = msg.is_cloud
 
     return (
       <div 
@@ -218,7 +219,10 @@ export const ScItem = React.memo(({ item, readMessages, onUserClick, onToggleRea
               >
                   {msg.sender.uname}
               </span>
-              <span style={{marginLeft: 'auto'}}>￥{msg.price}</span>
+              <span style={{marginLeft: 'auto', display: 'flex', alignItems: 'center'}}>
+                  {isCloud && <span style={{fontSize: '10px', backgroundColor: 'rgba(255,255,255,0.3)', padding: '0 4px', borderRadius: '4px', marginRight: '4px'}}>云同步</span>}
+                  ￥{msg.price}
+              </span>
           </div>
           <div className={styles['sc-body']}>
               <Linkify>{msg.message}</Linkify>
@@ -236,6 +240,7 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
     const msg = item.data
     const isRead = readMessages.has(item.id)
     const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
+    const isCloud = msg.is_cloud
     
     // 使用 hook 获取最新头像
     const currentFace = useUserFace(msg.sender.face, msg.sender.uid)
@@ -301,8 +306,9 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
                 </div>
             </div>
                 
-                <div style={{ fontSize: '16px', marginLeft: '8px' }}>
-                    ￥{priceRMB}
+                <div style={{ fontSize: '16px', marginLeft: '8px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    {isCloud && <span style={{fontSize: '10px', backgroundColor: 'rgba(255,255,255,0.3)', padding: '0 4px', borderRadius: '4px', marginBottom: '2px'}}>云同步</span>}
+                    <span>￥{priceRMB}</span>
                 </div>
             </div>
         )
@@ -441,6 +447,7 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginLeft: '8px' }}>
+                {isCloud && <span style={{fontSize: '10px', backgroundColor: 'rgba(255,255,255,0.3)', padding: '0 4px', borderRadius: '4px', marginBottom: '2px'}}>云同步</span>}
                 {giftImg && (
                     <img 
                         src={giftImg} 

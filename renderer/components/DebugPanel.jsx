@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-export default function DebugPanel({ onClose }) {
+export default function DebugPanel({ onClose, onManualSync }) {
   const [activeTab, setActiveTab] = useState('danmu')
   const [position, setPosition] = useState({ x: window.innerWidth - 320, y: window.innerHeight - 400 })
   const [isDragging, setIsDragging] = useState(false)
@@ -205,6 +205,18 @@ export default function DebugPanel({ onClose }) {
                     泛洪头像缓存 (1000请求)
                 </button>
                 
+                {/* 分组：云端同步 */}
+                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', marginTop: '8px' }}>云端同步测试</div>
+                <button 
+                    onClick={() => {
+                        const twoDaysAgo = Date.now() - 2 * 24 * 60 * 60 * 1000
+                        if (onManualSync) onManualSync(twoDaysAgo)
+                    }}
+                    style={{ padding: '6px', backgroundColor: '#12b886', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                >
+                    同步2天前数据 (强制)
+                </button>
+
                 {/* 分组：崩溃模拟 */}
                 <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', marginTop: '8px' }}>崩溃模拟</div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>

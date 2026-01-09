@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import { getQrCode, checkQrCode, QrCodeStatus, getDanmuInfo, getGiftConfig } from '@/lib/bilibili'
 import { createDanmuEntry } from '@/lib/common/danmu-entry'
 import { DanmuMessage, GiftMessage, SuperChatMessage, GuardMessage } from '@/lib/types/danmaku'
+import { fetchGifts, fetchScs, fetchSubs } from '@/lib/cloud-api'
 import { DanmuItem, ScItem, GiftItem } from '@/components/DanmuListItems'
 import { levelToIconURL } from '@/lib/utils'
 import moment from 'moment'
@@ -235,22 +236,30 @@ export default function HomePage() {
          
          if (msg.cmd === 'DANMU_MSG') {
              try {
+                // 普通弹幕ID通常在info[0][15]['id_str'] 或者 info[9]['ct'] (timestamp)
+                // 这里暂时保持随机，弹幕暂不云同步去重
                 newItem = { id: Math.random(), type: 'msg', data: new DanmuMessage({ info: msg.info }) }
                 listType = 'danmu'
              } catch(e) { console.error(e); return; }
          } else if (msg.cmd === 'SEND_GIFT') {
              try {
-                newItem = { id: Math.random(), type: 'gift', data: new GiftMessage(msg) }
+                // 使用 tid 作为 ID
+                const giftData = new GiftMessage(msg)
+                newItem = { id: giftData.id || Math.random(), type: 'gift', data: giftData }
                 listType = 'gift'
              } catch(e) { console.error(e); return; }
          } else if (msg.cmd === 'SUPER_CHAT_MESSAGE') {
              try {
-                newItem = { id: Math.random(), type: 'superchat', data: new SuperChatMessage(msg) }
+                // 使用 id 作为 ID
+                const scData = new SuperChatMessage(msg)
+                newItem = { id: scData.id, type: 'superchat', data: scData }
                 listType = 'sc'
              } catch(e) { console.error(e); return; }
          } else if (msg.cmd === 'USER_TOAST_MSG') {
              try {
-                newItem = { id: Math.random(), type: 'gift', data: new GuardMessage(msg) }
+                // 舰长 使用 payflow_id 作为 ID
+                const guardData = new GuardMessage(msg)
+                newItem = { id: guardData.id, type: 'gift', data: guardData }
                 listType = 'gift'
              } catch(e) { console.error(e); return; }
          } else if (msg.cmd === 'SYSTEM_MSG') {
@@ -376,6 +385,7 @@ export default function HomePage() {
   const [giftMap, setGiftMap] = useState({}) 
   // 礼物过滤器
   const [minGiftPrice, setMinGiftPrice] = useState(0) // RMB
+  const [enableCloudSync, setEnableCloudSync] = useState(false) // 是否开启云同步
   const [showGiftSettings, setShowGiftSettings] = useState(false)
   
   // 弹幕过滤器
@@ -765,6 +775,457 @@ export default function HomePage() {
       document.addEventListener('mousemove', onMouseMove)
       document.addEventListener('mouseup', onMouseUp)
   }
+
+  const handleCloudSync = useCallback(async (customStartTime = null) => {
+    // Helper to send log to main process
+    const logToMain = (level, message, ...args) => {
+        // Send to main process via IPC
+        if (window.ipc) {
+            window.ipc.send('renderer-log', level, message, ...args)
+        }
+        // Also keep local console for devtools
+        console[level](message, ...args)
+    }
+
+    logToMain('info', '[CloudSync] Starting sync...', { customStartTime })
+    let startTime = customStartTime
+
+    // Check if cloud sync is enabled
+    if (!enableCloudSync && !customStartTime) {
+        // Only skip auto-sync if disabled. customStartTime (manual sync) might override this?
+        // Usually manual sync implies user wants to sync. But if we want a strict off switch:
+        // logToMain('info', '[CloudSync] Skipped: Feature disabled')
+        // return
+        
+        // Let's assume manual sync (Debug Panel) works even if auto-sync is off.
+        // But for the auto-interval, we should check enableCloudSync.
+        // Since handleCloudSync is called by the interval, we check it here.
+        if (!customStartTime) {
+             logToMain('info', '[CloudSync] Skipped: Feature disabled')
+             return
+        }
+    }
+    
+    // Auto sync check
+    if (!startTime) {
+        if (!roomInfo || Number(roomInfo.room_id) !== 21013446 || roomInfo.live_status !== 1) {
+            logToMain('info', '[CloudSync] Skipped: Not in target room or not live', { roomInfo })
+            return
+        }
+        startTime = (roomInfo.live_start_time || 0) * 1000
+    }
+    
+    if (!startTime) {
+        logToMain('info', '[CloudSync] Skipped: No start time')
+        return
+    }
+
+    logToMain('info', '[CloudSync] Fetching data from:', new Date(startTime).toLocaleString())
+
+    try {
+      // Parallel fetch with individual error handling to prevent total failure
+      const [giftsRes, scsRes, subsRes] = await Promise.all([
+        fetchGifts({ start: startTime, limit: 100 }).catch(e => {
+            logToMain('warn', '[CloudSync] Fetch gifts failed', e)
+            return []
+        }), 
+        fetchScs({ start: startTime, limit: 100 }).catch(e => {
+            logToMain('warn', '[CloudSync] Fetch SCs failed', e)
+            return []
+        }),
+        fetchSubs({ start: startTime, limit: 100 }).catch(e => {
+            logToMain('warn', '[CloudSync] Fetch subs failed', e)
+            return []
+        })
+      ])
+
+      logToMain('info', '[CloudSync] Fetch results:', { 
+          gifts: giftsRes?.length || 0, 
+          scs: scsRes?.length || 0, 
+          subs: subsRes?.length || 0 
+      })
+
+      setScList(prev => {
+        const newItems = []
+        const existingIds = new Set(prev.map(item => item.data.id))
+        
+        if (scsRes && Array.isArray(scsRes)) {
+            for (const item of scsRes) {
+                const id = item.id
+                if (existingIds.has(id)) continue
+
+                let raw = null
+                if (item.originalEvent) {
+                    try {
+                        raw = typeof item.originalEvent === 'string' ? JSON.parse(item.originalEvent) : item.originalEvent
+                    } catch (e) {}
+                }
+
+                // Basic Info
+                let content = item.content || item.message
+                let price = item.price
+                let ts = Number(item.timestamp) || 0
+                
+                if (raw) {
+                    if (raw.message) content = raw.message
+                    if (raw.price) price = raw.price
+                    if (raw.start_time) ts = Number(raw.start_time)
+                }
+                
+                if (!ts && item.time) ts = new Date(item.time).getTime() / 1000
+                if (isNaN(ts) || ts <= 0) ts = Date.now() / 1000
+
+                // User Info
+                let uinfo = { uid: 0, uname: '未知用户', face: '' }
+                
+                // Try from raw.uinfo first (as per user sample)
+                if (raw && raw.uinfo) {
+                     if (raw.uinfo.user_info) {
+                         uinfo.uname = raw.uinfo.user_info.uname || uinfo.uname
+                         uinfo.face = raw.uinfo.user_info.face || uinfo.face
+                     } else if (raw.uinfo.base) {
+                         uinfo.uname = raw.uinfo.base.name || uinfo.uname
+                         uinfo.face = raw.uinfo.base.face || uinfo.face
+                     }
+                }
+                
+                // Try from raw root
+                if (raw) {
+                    if (raw.uid) uinfo.uid = raw.uid
+                    if (!uinfo.uname || uinfo.uname === '未知用户') {
+                         if (raw.user_info && raw.user_info.uname) uinfo.uname = raw.user_info.uname
+                    }
+                }
+
+                // Fallback to item
+                if (!uinfo.uid) {
+                    if (typeof item.sender === 'number') uinfo.uid = item.sender
+                    else if (item.sender && item.sender.uid) uinfo.uid = item.sender.uid
+                    else if (item.uid) uinfo.uid = item.uid
+                }
+                
+                if (!uinfo.uname || uinfo.uname === '未知用户') {
+                     if (item.uname) uinfo.uname = item.uname
+                }
+
+                // Medal Info
+                let medalInfo = null
+                if (raw && raw.medal_info) {
+                    medalInfo = raw.medal_info
+                }
+
+                const mockBody = {
+                    roomid: 21013446,
+                    data: {
+                        id: id,
+                        uid: uinfo.uid,
+                        user_info: {
+                            uname: uinfo.uname,
+                            face: uinfo.face
+                        },
+                        medal_info: medalInfo,
+                        message: content,
+                        price: price,
+                        start_time: ts
+                    }
+                }
+                
+                const msg = new SuperChatMessage(mockBody)
+                msg.is_cloud = true
+                newItems.push({ id: Math.random(), type: 'superchat', data: msg, sortTime: ts })
+                existingIds.add(id)
+            }
+        }
+        
+        if (newItems.length === 0) return prev
+        
+        logToMain('info', `[CloudSync] Added ${newItems.length} SCs`)
+        
+        const combined = [...prev, ...newItems]
+        return combined.sort((a, b) => {
+             const getTs = (x) => x.sortTime || x.data.start_time || x.data.timestamp || 0
+             return getTs(b) - getTs(a)
+        })
+      })
+
+      // Combine Gifts and Subs processing
+      setGiftList(prev => {
+          const newItems = []
+          const existingIds = new Set(prev.map(item => item.data.id || item.data.tid || item.data.payflow_id))
+          
+          // --- Process Gifts ---
+          if (giftsRes && Array.isArray(giftsRes)) {
+             for (const item of giftsRes) {
+                 const id = item.tid || item.id
+                 if (existingIds.has(id)) continue;
+                 
+                 // Parse originalEvent first as it contains the most complete info
+                 let raw = null
+                 if (item.originalEvent) {
+                     try {
+                         raw = typeof item.originalEvent === 'string' ? JSON.parse(item.originalEvent) : item.originalEvent
+                     } catch (e) {}
+                 }
+
+                 // Filter > 29 yuan
+                 // Check price from raw first if available, otherwise item.price
+                 let price = item.price
+                 if (raw && raw.price) price = raw.price
+                 if ((price || 0) <= 29000) continue
+                 
+                 // User Info Extraction
+                 let uinfo = { uid: item.uid, uname: item.uname || '未知用户', face: '' }
+                 
+                 if (raw) {
+                     // Try extracting from originalEvent (most reliable based on user input)
+                     if (raw.sender_uinfo && raw.sender_uinfo.base) {
+                         uinfo.uid = raw.sender_uinfo.uid || raw.uid || uinfo.uid
+                         uinfo.uname = raw.sender_uinfo.base.name || uinfo.uname
+                         uinfo.face = raw.sender_uinfo.base.face || uinfo.face
+                     } else {
+                         if (raw.uid) uinfo.uid = raw.uid
+                         if (raw.uname) uinfo.uname = raw.uname
+                         if (raw.face) uinfo.face = raw.face
+                     }
+                 }
+                 
+                 // Fallback to item properties if still missing info
+                 if (uinfo.uname === '未知用户' || !uinfo.face) {
+                     if (item.sender_uinfo && item.sender_uinfo.base) {
+                         uinfo = { uid: item.sender_uinfo.uid, uname: item.sender_uinfo.base.name, face: item.sender_uinfo.base.face }
+                     } else if (item.user_info) {
+                         uinfo = { uid: item.uid || item.user_info.uid, uname: item.user_info.uname || item.user_info.name, face: item.user_info.face }
+                     } else if (item.sender && typeof item.sender === 'object') {
+                         uinfo = { uid: item.sender.uid, uname: item.sender.uname, face: item.sender.face }
+                     } else if (typeof item.sender === 'number' || typeof item.sender === 'string') {
+                         // If sender is just ID and we didn't get info from raw
+                         if (!uinfo.uid) uinfo.uid = item.sender
+                     }
+                 }
+                 
+                 // Time
+                 let ts = Number(item.timestamp) || 0
+                 if (!ts && item.time) ts = new Date(item.time).getTime() / 1000
+                 if (raw && raw.timestamp) ts = Number(raw.timestamp) || ts
+                 
+                 // Ensure ts is valid number
+                 if (isNaN(ts) || ts <= 0) ts = Date.now() / 1000
+                 
+                 // Extract medal info from raw
+                 let medalInfo = null
+                 if (raw) {
+                     if (raw.medal_info) {
+                         medalInfo = raw.medal_info
+                     } else if (raw.sender_uinfo && raw.sender_uinfo.medal) {
+                          // Standardize to Bilibili medal_info format
+                          const m = raw.sender_uinfo.medal
+                          medalInfo = {
+                              medal_name: m.name,
+                              medal_level: m.level,
+                              is_lighted: m.is_light,
+                              guard_level: m.guard_level,
+                              medal_color: m.color,
+                              medal_color_start: m.color_start,
+                              medal_color_end: m.color_end,
+                              medal_color_border: m.color_border
+                          }
+                     }
+                 }
+
+                 // Gift Name
+                 let giftName = item.giftName || item.gift_name || item.name
+                 if (raw) {
+                     giftName = raw.giftName || raw.gift_name || (raw.gift_info && raw.gift_info.name) || giftName
+                 }
+                 if (!giftName && item.gift_info) giftName = item.gift_info.name
+                 if (!giftName) giftName = '未知礼物'
+
+                 const mockBody = {
+                     data: {
+                         giftId: item.giftId || (item.gift_info && item.gift_info.gift_id) || (raw && raw.giftId) || 0,
+                         giftName: giftName,
+                         price: price, 
+                         uid: uinfo.uid,
+                         uname: uinfo.uname,
+                         face: uinfo.face,
+                         action: '投喂',
+                         num: item.num,
+                         timestamp: ts,
+                         tid: id,
+                         sender: {
+                             uid: uinfo.uid,
+                             uname: uinfo.uname,
+                             face: uinfo.face,
+                             medal_info: medalInfo
+                         }
+                     }
+                 }
+                 const msg = new GiftMessage(mockBody)
+                 msg.is_cloud = true
+                 newItems.push({ id: Math.random(), type: 'gift', data: msg, sortTime: ts })
+                 existingIds.add(id)
+             }
+          }
+          
+          // --- Process Subs ---
+          if (subsRes && Array.isArray(subsRes)) {
+             for (const item of subsRes) {
+                 const id = item.id
+                 if (existingIds.has(id)) continue;
+                 
+                 // Try to parse originalEvent for details
+                 let raw = null
+                 if (item.originalEvent) {
+                     try {
+                         raw = typeof item.originalEvent === 'string' ? JSON.parse(item.originalEvent) : item.originalEvent
+                     } catch (e) {}
+                 }
+
+                 let uinfo = { uid: item.uid, uname: item.username || item.uname || '未知用户', face: '' }
+                 
+                 if (raw) {
+                     if (raw.sender_uinfo && raw.sender_uinfo.base) {
+                         uinfo.uid = raw.sender_uinfo.uid || raw.uid || uinfo.uid
+                         uinfo.uname = raw.sender_uinfo.base.name || uinfo.uname
+                         uinfo.face = raw.sender_uinfo.base.face || uinfo.face
+                     } else if (raw.sender_uinfo) {
+                         // Some formats might be direct
+                         uinfo.uid = raw.sender_uinfo.uid || uinfo.uid
+                     }
+                 }
+
+                 // Fallback if still missing info
+                 if (!uinfo.uid || uinfo.uname === '未知用户') {
+                     if (item.sender && typeof item.sender === 'object') {
+                         uinfo.uid = item.sender.uid
+                         uinfo.uname = item.sender.uname || uinfo.uname
+                         uinfo.face = item.sender.face || uinfo.face
+                     } else {
+                         uinfo.uid = item.uid || item.sender
+                     }
+                     
+                     if (item.sender_uinfo && item.sender_uinfo.base) {
+                         uinfo = { uid: item.sender_uinfo.uid, uname: item.sender_uinfo.base.name, face: item.sender_uinfo.base.face }
+                     }
+                 }
+                 
+                 let ts = Number(item.timestamp) || 0
+                 if (!ts && item.time) ts = new Date(item.time).getTime() / 1000
+                 if (!ts && item.start_time) ts = Number(item.start_time) || 0
+                 if (!ts && raw && raw.guard_info) ts = Number(raw.guard_info.start_time) || 0
+                 
+                 // Ensure ts is valid number
+                 if (isNaN(ts) || ts <= 0) ts = Date.now() / 1000
+                 
+                 let gLevel = item.guard_level
+                 if (!gLevel && raw && raw.guard_info) gLevel = raw.guard_info.guard_level
+                 if (!gLevel && item.guard_info) gLevel = item.guard_info.guard_level
+                 
+                 let price = item.price
+                 if (!price && raw && raw.pay_info) price = raw.pay_info.price
+                 if (!price && item.pay_info) price = item.pay_info.price
+                 
+                 let unit = item.unit || '月'
+                 if (raw && raw.pay_info && raw.pay_info.unit) unit = raw.pay_info.unit
+                 if (item.pay_info && item.pay_info.unit) unit = item.pay_info.unit
+                 
+                 let num = item.num || 1
+                 if (raw && raw.pay_info && raw.pay_info.num) num = raw.pay_info.num
+                 if (item.pay_info && item.pay_info.num) num = item.pay_info.num
+                 
+                 const mockBody = {
+                     roomid: 21013446,
+                     data: {
+                         payflow_id: id,
+                         uid: uinfo.uid,
+                         username: uinfo.uname,
+                         uname: uinfo.uname, 
+                         guard_level: gLevel,
+                         price: price,
+                         start_time: ts,
+                         num: num,
+                         unit: unit,
+                         face: uinfo.face,
+                         sender: {
+                             uid: uinfo.uid,
+                             uname: uinfo.uname,
+                             face: uinfo.face
+                         }
+                     }
+                 }
+                 const msg = new GuardMessage(mockBody)
+                 msg.is_cloud = true
+                 
+                 // If face is missing, try to fetch it asynchronously
+                 if (!uinfo.face && uinfo.uid) {
+                     window.ipc.invoke('fetch-user-face', uinfo.uid).then(faceUrl => {
+                         if (faceUrl) {
+                             setGiftList(current => {
+                                 // Need to find this item and update it
+                                 return current.map(currItem => {
+                                     // Check if it's the same item (by id or tid)
+                                     // GuardMessage uses 'id' property mapped from payflow_id
+                                     if (currItem.type === 'gift' && currItem.data instanceof GuardMessage && currItem.data.id === id) {
+                                         // Create a new instance or clone to trigger re-render
+                                         const newData = Object.assign(Object.create(Object.getPrototypeOf(currItem.data)), currItem.data)
+                                         newData.sender = { ...newData.sender, face: faceUrl }
+                                         return { ...currItem, data: newData }
+                                     }
+                                     return currItem
+                                 })
+                             })
+                         }
+                     }).catch(err => console.error('[CloudSync] Failed to fetch face for guard:', err))
+                 }
+
+                 newItems.push({ id: Math.random(), type: 'gift', data: msg, sortTime: ts })
+                 existingIds.add(id)
+             }
+          }
+          
+          if (newItems.length === 0) return prev
+          
+          logToMain('info', `[CloudSync] Added ${newItems.length} gifts/subs`)
+          
+          // Merge and Sort
+          const combined = [...prev, ...newItems]
+          // Sort descending by timestamp
+          // Note: local items might not have 'sortTime' property attached directly.
+          // Need to extract timestamp from item.data
+          return combined.sort((a, b) => {
+              const getTs = (x) => {
+                  if (x.sortTime) return x.sortTime
+                  // Fallback for local items
+                  if (x.data.timestamp) return x.data.timestamp
+                  if (x.data.start_time) return x.data.start_time // for SC/Guard
+                  // GiftMessage has timestamp. GuardMessage has timestamp (mapped to start_time).
+                  return 0
+              }
+              return getTs(b) - getTs(a)
+          })
+      })
+      
+    } catch (err) {
+      logToMain('error', '[CloudSync] Failed:', err)
+    }
+  }, [roomInfo?.room_id, roomInfo?.live_status, roomInfo?.live_start_time])
+
+  useEffect(() => {
+    // Strict check before starting auto-sync to avoid unnecessary logs/requests
+    // 1. Must have roomInfo
+    // 2. Must be target room (21013446)
+    // 3. Must be live (live_status === 1)
+    if (!roomInfo || Number(roomInfo.room_id) !== 21013446 || roomInfo.live_status !== 1) {
+        return
+    }
+
+    // Initial sync
+    handleCloudSync()
+
+    // Interval sync (3 minutes)
+    const interval = setInterval(() => handleCloudSync(), 180000)
+    return () => clearInterval(interval)
+  }, [handleCloudSync, roomInfo])
 
   useEffect(() => {
     initLogin()
@@ -1330,7 +1791,22 @@ export default function HomePage() {
                                         >
                                             {msg.sender.uname}
                                         </span>
-                                        <span style={{marginLeft: 'auto'}}>￥{msg.price}</span>
+                                        <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center'}}>
+                                            {msg.is_cloud && (
+                                                <span style={{
+                                                    marginRight: '4px',
+                                                    fontSize: '10px',
+                                                    backgroundColor: 'rgba(0,0,0,0.2)',
+                                                    padding: '2px 4px',
+                                                    borderRadius: '4px',
+                                                    lineHeight: '1',
+                                                    cursor: 'help'
+                                                }} title="云端同步消息">
+                                                    云
+                                                </span>
+                                            )}
+                                            <span>￥{msg.price}</span>
+                                        </div>
                                     </div>
                                     <div className={styles['sc-content']}>
                                         {msg.message}
@@ -1782,6 +2258,21 @@ export default function HomePage() {
                                           <span style={{ fontSize: '12px' }}>5000</span>
                                       </div>
                                   </div>
+
+                                  <div style={{ marginTop: 16 }}>
+                                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
+                                          <input 
+                                              type="checkbox" 
+                                              checked={enableCloudSync}
+                                              onChange={(e) => setEnableCloudSync(e.target.checked)}
+                                              style={{ marginRight: '8px' }}
+                                          />
+                                          开启云同步 (礼物/SC补漏)
+                                      </label>
+                                      <div style={{ fontSize: '12px', color: '#666', marginTop: '4px', marginLeft: '20px' }}>
+                                          开启后将定期从服务器同步遗漏的礼物和SC。默认关闭。
+                                      </div>
+                                  </div>
                                   
                                   <div style={{ marginTop: '16px', textAlign: 'right' }}>
                                       <button 
@@ -1824,7 +2315,7 @@ export default function HomePage() {
               </div>
 
               {/* 调试面板 */}
-              {showDebug && <DebugPanel onClose={() => setShowDebug(false)} />}
+              {showDebug && <DebugPanel onClose={() => setShowDebug(false)} onManualSync={handleCloudSync} />}
 
               {/* 工具面板 (已移至独立窗口) */}
               {/* {showTools && <ToolsPanel onClose={() => setShowTools(false)} />} */}
@@ -2100,7 +2591,22 @@ export default function HomePage() {
                                         >
                                             {msg.sender.uname}
                                         </span>
-                                        <span style={{marginLeft: 'auto'}}>￥{msg.price}</span>
+                                        <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center'}}>
+                                            {msg.is_cloud && (
+                                                <span style={{
+                                                    marginRight: '4px',
+                                                    fontSize: '10px',
+                                                    backgroundColor: 'rgba(0,0,0,0.2)',
+                                                    padding: '2px 4px',
+                                                    borderRadius: '4px',
+                                                    lineHeight: '1',
+                                                    cursor: 'help'
+                                                }} title="云端同步消息">
+                                                    云
+                                                </span>
+                                            )}
+                                            <span>￥{msg.price}</span>
+                                        </div>
                                     </div>
                                     <div className={styles['sc-body']}>
                                         <Linkify>{msg.message}</Linkify>
@@ -2210,238 +2716,17 @@ export default function HomePage() {
                           </div>
                       </div>
                       <div className={styles['col-content']}>
-                          {giftList.filter(item => item.type === 'gift' && shouldShowItem(item)).map(item => {
-                              const msg = item.data
-                              const isRead = readMessages.has(item.id)
-                              const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
-                              
-                              // Handle GuardMessage (Captain/Admiral/Governor)
-                              if (msg instanceof GuardMessage || msg.guard_level) {
-                                  const guardName = msg.guard_level === 1 ? '总督' : msg.guard_level === 2 ? '提督' : '舰长'
-                                  const priceRMB = msg.price / 1000 
-                                  
-                                  if (priceRMB <= minGiftPrice) return null
-                                  
-                                  // Premium Card for Guard
-                                  const cardBg = msg.guard_level === 1 ? '#d32f2f' : // Governor Red
-                                                 msg.guard_level === 2 ? '#7b1fa2' : // Admiral Purple
-                                                                         '#1976d2'   // Captain Blue
-
-                                  return (
-                                      <div 
-                                        key={item.id} 
-                                        className={styles['gift-card-anim']}
-                                        style={{ 
-                                            backgroundColor: cardBg,
-                                            color: '#fff',
-                                            borderRadius: '8px',
-                                            padding: '10px 12px',
-                                            marginBottom: '8px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                                            fontWeight: 'bold',
-                                            border: 'none',
-                                            ...readStyle
-                                        }}
-                                        onDoubleClick={() => handleToggleRead(item.id)}
-                                      >
-                                          <div 
-                                            style={{ position: 'relative', marginRight: '12px', cursor: 'pointer' }}
-                                            onClick={(e) => handleUserClick(e, msg.sender)}
-                                            data-user-action-trigger="true"
-                                          >
-                                              <img 
-                                                  src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
-                                                  alt="face" 
-                                                  style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)' }} 
-                                              />
-                                              <img 
-                                                  src={getGuardIcon(msg.guard_level)}
-                                                  style={{ position: 'absolute', bottom: '-4px', right: '-4px', width: '18px', height: '18px' }}
-                                                  alt="icon"
-                                              />
-                                          </div>
-                                          
-                                          <div style={{ flex: 1 }}>
-                                          <div 
-                                              style={{ fontSize: '15px', lineHeight: '1.2', cursor: 'pointer' }}
-                                              onClick={(e) => handleUserClick(e, msg.sender)}
-                                              data-user-action-trigger="true"
-                                          >
-                                              {msg.sender.uname}
-                                          </div>
-                                          <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '4px' }}>
-                                              开通了 {guardName} x{msg.num}{msg.unit}
-                                          </div>
-                                      </div>
-                                          
-                                          <div style={{ fontSize: '16px', marginLeft: '8px' }}>
-                                              ￥{priceRMB}
-                                          </div>
-                                      </div>
-                                  )
-                              }
-
-                              const config = giftMap[msg.gift_info.id]
-                              
-                              // 计算价值
-                              let valueRMB = 0
-                              let valueText = ''
-                              // 优先使用配置，回退到 msg.gift_info.price
-                              const price = config ? config.price : msg.gift_info.price
-                              const coinType = config ? config.coin_type : (msg.gift_info.price > 0 ? 'gold' : 'silver') // 假设
-                              
-                              if (price > 0) {
-                                  const total = price * msg.num
-                                  if (coinType === 'gold') {
-                                      // 1000 金瓜子 = 1 人民币
-                                      valueRMB = total / 1000
-                                      valueText = `￥${valueRMB >= 1 ? valueRMB.toFixed(1) : valueRMB}` 
-                                  } else {
-                                      // 银瓜子或未知
-                                      // valueText = `${total} Silver`
-                                  }
-                              }
-  
-                              // 过滤逻辑
-                              if (valueRMB <= minGiftPrice) return null
-
-                              const isHighValue = valueRMB > 500
-                              
-                              // 获取图片 URL
-                              const giftImg = config ? config.img : (msg.gift_info.webp || msg.gift_info.img_basic)
-
-                              // 如果价值 <= 29，使用单行显示 (和弹幕类似)
-                              if (valueRMB <= 29) {
-                                  return (
-                                       <div 
-                                         key={item.id} 
-                                         className={styles['danmu-item']} // 复用弹幕行样式
-                                         style={{ display: 'flex', alignItems: 'center', padding: '4px 8px', flexWrap: 'wrap', gap: '4px', ...readStyle }}
-                                         onDoubleClick={() => handleToggleRead(item.id)}
-                                       >
-                                           <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                                               {/* 头像 */}
-                                               <img 
-                                                   src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
-                                                   alt="face" 
-                                                   style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', cursor: 'pointer' }} 
-                                                   onClick={(e) => handleUserClick(e, msg.sender)}
-                                                   data-user-action-trigger="true"
-                                               />
-                                               
-                                               {/* 勋章 */}
-                                               {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
-                                                   <span 
-                                                     className={styles['medal-badge']}
-                                                     style={{
-                                                       borderColor: getMedalColor(msg.sender.medal_info.medal_level),
-                                                       backgroundColor: getMedalColor(msg.sender.medal_info.medal_level),
-                                                       backgroundImage: 'none',
-                                                       marginRight: '6px',
-                                                       whiteSpace: 'nowrap'
-                                                     }}
-                                                   >
-                                                       {msg.sender.medal_info.medal_name}|{msg.sender.medal_info.medal_level}
-                                                   </span>
-                                               )}
-                                               
-                                               {/* 用户名 (黑色加粗) */}
-                                               <span 
-                                                   style={{ color: '#333', fontWeight: 'bold', marginRight: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                                                   onClick={(e) => handleUserClick(e, msg.sender)}
-                                                   data-user-action-trigger="true"
-                                               >
-                                                   {msg.sender.uname}
-                                               </span>
-                                           </div>
-                                           
-                                           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
-                                               <span style={{ color: '#666', marginRight: '4px', whiteSpace: 'nowrap' }}>投喂</span>
-     
-                                               {/* 礼物图片 */}
-                                               {giftImg && (
-                                                   <img 
-                                                       src={giftImg} 
-                                                       alt="gift" 
-                                                       style={{ width: '24px', height: '24px', marginRight: '4px', objectFit: 'contain' }} 
-                                                   />
-                                               )}
-                                               
-                                               {/* 礼物名称 (蓝色) */}
-                                               <span style={{ color: '#00a1d6', fontWeight: 'bold', marginRight: '4px', whiteSpace: 'nowrap' }}>
-                                                   {msg.gift_info.name} x{msg.num}
-                                               </span>
-                                               
-                                               {/* 价值 */}
-                                               {valueText && (
-                                                   <span style={{ color: '#00a1d6', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                                                       ({valueText})
-                                                   </span>
-                                               )}
-                                           </div>
-                                       </div>
-                                  )
-                              }
-
-                              return (
-                                  <div 
-                                    key={item.id} 
-                                    className={styles['gift-card-anim']}
-                                    style={{
-                                        backgroundColor: valueRMB > 99 ? '#E8A900' : '#f085a5', // 金色 (>99) 或 粉色
-                                        color: '#fff',
-                                        borderRadius: '8px',
-                                        padding: '10px 12px',
-                                        marginBottom: '8px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                                        fontWeight: 'bold',
-                                        border: 'none',
-                                        ...readStyle
-                                    }}
-                                    onDoubleClick={() => handleToggleRead(item.id)}
-                                  >
-                                      <div 
-                                        style={{ position: 'relative', marginRight: '12px', cursor: 'pointer' }}
-                                        onClick={(e) => handleUserClick(e, msg.sender)}
-                                        data-user-action-trigger="true"
-                                      >
-                                          <img 
-                                              src={msg.sender.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'} 
-                                              alt="face" 
-                                              style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)' }} 
-                                          />
-                                      </div>
-                                      
-                                      <div style={{ flex: 1 }}>
-                                          <div 
-                                              style={{ fontSize: '15px', lineHeight: '1.2', cursor: 'pointer' }}
-                                              onClick={(e) => handleUserClick(e, msg.sender)}
-                                              data-user-action-trigger="true"
-                                          >
-                                              {msg.sender.uname}
-                                          </div>
-                                          <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '4px' }}>
-                                              {msg.action} {msg.gift_info.name} x{msg.num}
-                                          </div>
-                                      </div>
-                                      
-                                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginLeft: '8px' }}>
-                                          {giftImg && (
-                                              <img 
-                                                  src={giftImg} 
-                                                  alt="gift" 
-                                                  style={{ width: '32px', height: '32px', marginBottom: '2px', objectFit: 'contain' }} 
-                                              />
-                                          )}
-                                          <div style={{ fontSize: '14px' }}>￥{valueRMB.toFixed(1)}</div>
-                                      </div>
-                                  </div>
-                              )
-                          })}
+                          {giftList.filter(item => item.type === 'gift' && shouldShowItem(item)).map(item => (
+                              <GiftItem 
+                                  key={item.id}
+                                  item={item} 
+                                  readMessages={readMessages}
+                                  onUserClick={handleUserClick}
+                                  onToggleRead={handleToggleRead}
+                                  giftMap={giftMap}
+                                  minGiftPrice={minGiftPrice}
+                              />
+                          ))}
                       </div>
                   </div>
 
