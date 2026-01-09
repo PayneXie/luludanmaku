@@ -242,7 +242,15 @@ export class BiliWebSocket {
 
   Disconnect() {
     this._is_manual_close = true
+    if (this.ws && this.ws.statusCallback) {
+        this.ws.statusCallback('Disconnected')
+    }
+    // Remove the close handler to prevent reconnection logic from triggering
+    this.ws.close_handler = null
     this.ws.Disconnect()
+    // Restore the handler after a short delay (optional, but safer if we reuse the same instance)
+    // Actually, in background.ts we set activeBiliSocket = null, so this instance is dead.
+    // So removing close_handler is the correct fix.
   }
 
   reconnect() {

@@ -82,6 +82,8 @@ app.on('child-process-gone', (event, details) => {
 Object.assign(console, log.functions);
 
 import { GetNewQrCode, CheckQrCodeStatus, GetDanmuInfo, BiliCookies, GetUserInfo, GetBiliUserInfo, GetRoomInfo, GetSilentUserList, AddSilentUser } from './lib/bilibili_login'
+import { avatarFetcher } from './lib/avatar_fetcher'
+import { avatarDb } from './lib/db'
 import { BiliWebSocket, WsInfo, PackResult } from './lib/bilibili_socket'
 import { initOverlayServer, broadcastToOverlay, closeOverlayServer } from './lib/overlay_server'
 import fs from 'fs-extra'
@@ -177,17 +179,34 @@ async function processFaceQueue() {
         faceRetryCounts.delete(uid)
         continue
     }
+    
+    // Check Database (L2 Cache)
+    try {
+        const dbFace = await avatarDb.get(uid)
+        if (dbFace) {
+            faceCache.set(uid, dbFace)
+            isCacheDirty = true
+            pendingFaceRequests.delete(uid)
+            faceRetryCounts.delete(uid)
+            continue
+        }
+    } catch (e) { /* Ignore DB error */ }
 
     try {
-      // Fetch with delay to avoid rate limit
-      const userInfo = await GetBiliUserInfo(activeCookies, uid)
-      if (userInfo && userInfo.face) {
-        faceCache.set(uid, userInfo.face)
+      // Fetch with delay to avoid rate limit (Using AvatarFetcher)
+      const faceUrl = await avatarFetcher.fetchAvatar(uid)
+      if (faceUrl) {
+        faceCache.set(uid, faceUrl)
         isCacheDirty = true
+        // Write to DB (L2 Cache)
+        avatarDb.put(uid, faceUrl)
+        
+        // Success
+        pendingFaceRequests.delete(uid)
+        faceRetryCounts.delete(uid)
+      } else {
+        throw new Error('No face found via AvatarFetcher')
       }
-      // Success
-      pendingFaceRequests.delete(uid)
-      faceRetryCounts.delete(uid)
     } catch (err: any) {
        // Log error
        console.error(`[FaceCache] Failed for ${uid}:`, err.message || err)
@@ -219,8 +238,8 @@ async function processFaceQueue() {
     } 
     // finally block removed as we handle cleanup manually based on success/fail
 
-    // Wait 2000ms between requests to be safe
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // Wait 200ms between requests to be safe (reduced from 2000ms due to multi-api rotation)
+    await new Promise(resolve => setTimeout(resolve, 200))
   }
 
   isQueueProcessing = false
@@ -306,6 +325,9 @@ if (isProd) {
 
   // Start Overlay Server
   initOverlayServer()
+  
+  // Init Database (Async)
+  avatarDb.init().catch(err => log.error('Failed to init DB:', err))
 
   ;(async () => {
     await app.whenReady()
@@ -555,7 +577,7 @@ if (isProd) {
 })()
 
 app.on('window-all-closed', () => {
-  app.quit()
+  avatarDb.close().then(() => app.quit())
 })
 
 ipcMain.on('message', async (event, arg) => {
@@ -681,11 +703,20 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
                             const cachedFace = faceCache.get(uid)
                             if (cachedFace) msg.data.face = cachedFace
                         } else {
-                            const userInfo = await GetBiliUserInfo(activeCookies, uid)
-                            if (userInfo && userInfo.face) {
-                                msg.data.face = userInfo.face
-                                faceCache.set(uid, userInfo.face)
+                            // Try DB first
+                            const dbFace = await avatarDb.get(uid)
+                            if (dbFace) {
+                                msg.data.face = dbFace
+                                faceCache.set(uid, dbFace)
                                 isCacheDirty = true
+                            } else {
+                                const faceUrl = await avatarFetcher.fetchAvatar(uid)
+                                if (faceUrl) {
+                                    msg.data.face = faceUrl
+                                    faceCache.set(uid, faceUrl)
+                                    isCacheDirty = true
+                                    avatarDb.put(uid, faceUrl)
+                                }
                             }
                         }
                     }
@@ -719,7 +750,7 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
   }
 })
 
-ipcMain.on('bilibili-disconnect-socket', () => {
+ipcMain.on('bilibili-disconnect-socket', (event) => {
   if (activeBiliSocket) {
     activeBiliSocket.Disconnect()
     activeBiliSocket = null
@@ -729,6 +760,11 @@ ipcMain.on('bilibili-disconnect-socket', () => {
     messageTimer = null
   }
   messageBuffer = []
+  
+  // Explicitly confirm disconnected status to renderer
+  if (!event.sender.isDestroyed()) {
+      event.reply('danmu-status', 'Disconnected')
+  }
 })
 
 // Debug IPC for custom messages
@@ -885,9 +921,9 @@ ipcMain.on('bilibili-debug-send', async (event, { type, data }) => {
     // Try to fetch face for mock user
     let face = "https://i0.hdslb.com/bfs/face/member/noface.jpg"
     try {
-         const userInfo = await GetBiliUserInfo(activeCookies, uid)
-         if (userInfo && userInfo.face) {
-             face = userInfo.face
+         const faceUrl = await avatarFetcher.fetchAvatar(uid)
+         if (faceUrl) {
+             face = faceUrl
          }
     } catch(e) {
         console.error('Failed to fetch debug guard face', e)
@@ -1073,13 +1109,24 @@ ipcMain.handle('fetch-user-face', async (event, uid) => {
 
     // 2. Fetch directly (since this is user triggered, we want immediate result)
     // But we should still be careful about rate limits if user clicks too fast.
+    
+    // Check Database First
+    const dbFace = await avatarDb.get(uid)
+    if (dbFace) {
+       faceCache.set(uid, dbFace)
+       isCacheDirty = true
+       return dbFace
+    }
+
     // Let's use the queue? No, UI expects a Promise result.
     // Let's do a direct fetch but update cache.
-    const userInfo = await GetBiliUserInfo(activeCookies, uid)
-    if (userInfo && userInfo.face) {
-      faceCache.set(uid, userInfo.face)
+    const faceUrl = await avatarFetcher.fetchAvatar(uid)
+    if (faceUrl) {
+      faceCache.set(uid, faceUrl)
       isCacheDirty = true
-      return userInfo.face
+      // Write to DB
+      avatarDb.put(uid, faceUrl)
+      return faceUrl
     }
     return null
   } catch (e) {

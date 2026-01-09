@@ -788,6 +788,7 @@ export default function HomePage() {
   const disconnectDanmu = () => {
     window.ipc.send('bilibili-disconnect-socket')
     setDanmuStatus('Disconnected')
+    setShowConsole(false)
   }
 
   const addSystemMessage = (text) => {
@@ -1187,7 +1188,7 @@ export default function HomePage() {
                               <svg className="spinner" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '12px', color: '#fff' }}>
                                   <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
                               </svg>
-                              <div>{danmuStatus === 'Disconnected' ? '网络波动断线重连中...' : danmuStatus}</div>
+                              <div>{danmuStatus === 'Disconnected' ? '已断开连接' : danmuStatus}</div>
                           </div>
                           <button 
                               onClick={() => setShowConsole(false)}
@@ -1527,7 +1528,7 @@ export default function HomePage() {
                               <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
                           </svg>
                           <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
-                              {danmuStatus === 'Disconnected' ? '网络波动断线重连中...' : danmuStatus}
+                              {danmuStatus === 'Disconnected' ? '已断开连接' : danmuStatus}
                           </div>
                       </div>
                       
