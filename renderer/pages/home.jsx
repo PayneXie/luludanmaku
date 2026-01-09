@@ -129,6 +129,75 @@ export default function HomePage() {
   const [danmuStatus, setDanmuStatus] = useState('Disconnected')
   const [showConsole, setShowConsole] = useState(false)
   
+  // 重新登录遮罩状态
+  const [showReloginModal, setShowReloginModal] = useState(false)
+  const [reloginQr, setReloginQr] = useState('')
+  const [reloginStatus, setReloginStatus] = useState('初始化中...')
+  const reloginPollTimer = useRef(null)
+
+  // 监听 Cookie 过期事件
+  useEffect(() => {
+      const handleCookieExpired = () => {
+          console.log('Cookie expired event received')
+          if (!showReloginModal) {
+              setShowReloginModal(true)
+              initRelogin()
+          }
+      }
+      window.ipc.on('cookie-expired', handleCookieExpired)
+      return () => {
+          window.ipc.removeAllListeners('cookie-expired')
+          if (reloginPollTimer.current) clearInterval(reloginPollTimer.current)
+      }
+  }, []) // Empty dependency array to run once
+
+  const initRelogin = async () => {
+      try {
+          if (reloginPollTimer.current) clearInterval(reloginPollTimer.current)
+          setReloginStatus('正在获取二维码...')
+          setReloginQr('')
+          
+          const { url, oauthKey } = await getQrCode()
+          const dataUrl = await QRCode.toDataURL(url)
+          setReloginQr(dataUrl)
+          setReloginStatus('请使用哔哩哔哩手机客户端扫码')
+          
+          reloginPollTimer.current = setInterval(async () => {
+              try {
+                  const data = await checkQrCode(oauthKey)
+                  if (data.status === QrCodeStatus.Success) {
+                      clearInterval(reloginPollTimer.current)
+                      setReloginStatus('登录成功！')
+                      setLoggedIn(true)
+                      setUserInfo(data.cookies)
+                      // 更新主进程 Cookies 和用户信息
+                      fetchUserInfo(data.cookies)
+                      
+                      // 延迟关闭遮罩
+                      setTimeout(() => {
+                          setShowReloginModal(false)
+                      }, 1000)
+                  } else if (data.status === QrCodeStatus.NeedConfirm) {
+                      setReloginStatus('已扫码，请在手机上确认')
+                  }
+              } catch (e) {
+                  console.log('Relogin Poll error:', e)
+                  setReloginStatus('二维码已过期，刷新中...')
+                  clearInterval(reloginPollTimer.current)
+                  setTimeout(initRelogin, 1000)
+              }
+          }, 3000)
+      } catch (e) {
+          console.error(e)
+          setReloginStatus('错误: ' + e.message)
+      }
+  }
+
+  const cancelRelogin = () => {
+      setShowReloginModal(false)
+      if (reloginPollTimer.current) clearInterval(reloginPollTimer.current)
+  }
+  
   // 数据列表拆分
   const [danmuList, setDanmuList] = useState([]) // 普通弹幕 + 系统消息 (限制长度)
   const [scList, setScList] = useState([])       // 醒目留言 (保留所有)
@@ -836,10 +905,12 @@ export default function HomePage() {
       // Check for auth error (Cookie expired)
       // Usually code -101 means Not Logged In
       if (e.code === -101 || (e.message && e.message.includes('-101'))) {
-          alert('登录凭证已过期，请重新扫码登录')
-          setLoggedIn(false)
-          setUserInfo(null)
-          initLogin()
+          // alert('登录凭证已过期，请重新扫码登录')
+          // setLoggedIn(false)
+          // setUserInfo(null)
+          // initLogin()
+          setShowReloginModal(true)
+          initRelogin()
           return
       }
 
@@ -2516,6 +2587,74 @@ export default function HomePage() {
                       isAdmin={isAdmin}
                       onMute={handleMuteUser}
                   />
+              )}
+
+              {/* 重新登录遮罩 (Portal) */}
+              {showReloginModal && createPortal(
+                  <div style={{
+                      position: 'fixed',
+                      top: 0, left: 0, right: 0, bottom: 0,
+                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                      zIndex: 9999,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backdropFilter: 'blur(4px)'
+                  }}>
+                      <div style={{
+                          background: '#fff',
+                          borderRadius: '12px',
+                          padding: '24px',
+                          width: '320px',
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          position: 'relative'
+                      }}>
+                          <button 
+                              onClick={cancelRelogin}
+                              style={{
+                                  position: 'absolute',
+                                  top: '12px',
+                                  right: '12px',
+                                  border: 'none',
+                                  background: 'none',
+                                  fontSize: '20px',
+                                  color: '#999',
+                                  cursor: 'pointer'
+                              }}
+                          >×</button>
+                          
+                          <h3 style={{ margin: '0 0 16px 0', color: '#333' }}>登录已过期</h3>
+                          <p style={{ margin: '0 0 20px 0', color: '#666', fontSize: '14px', textAlign: 'center' }}>
+                              您的登录凭证已失效，请重新扫码登录以恢复头像显示和弹幕发送功能。
+                          </p>
+                          
+                          <div style={{
+                              width: '180px',
+                              height: '180px',
+                              background: '#f5f5f5',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: '8px',
+                              overflow: 'hidden',
+                              marginBottom: '16px'
+                          }}>
+                              {reloginQr ? (
+                                  <img src={reloginQr} alt="Login QR Code" style={{ width: '100%', height: '100%' }} />
+                              ) : (
+                                  <div style={{ color: '#999', fontSize: '12px' }}>正在加载二维码...</div>
+                              )}
+                          </div>
+                          
+                          <div style={{ fontSize: '14px', color: '#00a1d6', fontWeight: 'bold' }}>
+                              {reloginStatus}
+                          </div>
+                      </div>
+                  </div>,
+                  document.body
               )}
           </div>
         </React.Fragment>

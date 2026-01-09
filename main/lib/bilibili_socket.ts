@@ -163,11 +163,23 @@ class BiliWsMessage {
     const bufLen = buffer.length || buffer.byteLength
     
     while (offset < bufLen) {
+      if (offset + 16 > bufLen) {
+          console.error(`[Socket] Buffer too short for header: offset=${offset}, total=${bufLen}`)
+          break
+      }
+      
       const packetLen = this.readInt(buffer, offset, 4)
       const headerLen = 16 
       // console.log(`Sub-packet: offset=${offset}, len=${packetLen}`) // Debug
 
-      if (packetLen <= 0 || offset + packetLen > bufLen) {
+      // Safety Check: packetLen must be at least headerLen
+      if (packetLen < headerLen) {
+          console.error(`[Socket] Invalid packet len (too small): ${packetLen}`)
+          break
+      }
+
+      // Safety Check: packetLen must not exceed remaining buffer
+      if (offset + packetLen > bufLen) {
         console.error(`[Socket] Invalid packet len: ${packetLen}, offset: ${offset}, total: ${bufLen}`)
         break
       }
@@ -190,6 +202,10 @@ class BiliWsMessage {
   }
 
   readInt(buffer: Uint8Array, start: number, len: number) {
+    if (start + len > buffer.length) {
+        // Prevent out of bounds access
+        return 0
+    }
     let result = 0
     for (let i = len - 1; i >= 0; i--) {
       result += Math.pow(256, len - i - 1) * buffer[start + i]

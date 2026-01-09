@@ -600,11 +600,21 @@ ipcMain.on('bilibili-connect-socket', (event, wsInfo: WsInfo) => {
     messageTimer = setInterval(() => {
       if (messageBuffer.length > 0) {
         // Send batch
-        event.reply('danmu-message', messageBuffer)
+        if (!event.sender.isDestroyed()) {
+            try {
+                event.reply('danmu-message', messageBuffer)
+            } catch (e) {
+                console.error('[Main] Failed to send to renderer:', e)
+            }
+        }
         
         // Forward to tools window if it exists
         if (toolsWindow && !toolsWindow.isDestroyed()) {
-            toolsWindow.webContents.send('danmu-message', messageBuffer)
+            try {
+                toolsWindow.webContents.send('danmu-message', messageBuffer)
+            } catch (e) {
+                console.error('[Main] Failed to send to tools window:', e)
+            }
         }
 
         messageBuffer = []
@@ -965,8 +975,39 @@ ipcMain.on('bilibili-debug-stress', async (event, { action }) => {
       } else {
           log.warn('[StressTest] No active socket to close.');
       }
+  } else if (action === 'simulate-cookie-expired') {
+      log.info('[StressTest] Simulating Cookie Expiration...');
+      // Clear global cookies to ensure next check fails (optional, but good for realism)
+      // activeCookies = {}; 
+      // Actually, we just want to trigger the UI flow.
+      const win = BrowserWindow.getAllWindows()[0]
+      if (win) {
+          win.webContents.send('cookie-expired')
+      }
   }
 })
+
+// Periodic Cookie Check (every 60 seconds)
+setInterval(async () => {
+    // Only check if we think we are logged in
+    if (activeCookies && Object.keys(activeCookies).length > 0) {
+        try {
+            await GetUserInfo(activeCookies)
+        } catch (err: any) {
+            // -101: Not Logged In
+            if (err.code === -101) {
+                log.warn('[Auth] Cookie expired or invalid (-101). Notifying renderer.')
+                const win = BrowserWindow.getAllWindows()[0]
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('cookie-expired')
+                }
+                // Optional: clear activeCookies to stop checking?
+                // activeCookies = {} 
+                // Better not clear immediately, let user re-login to overwrite.
+            }
+        }
+    }
+}, 60000)
 
 ipcMain.handle('bilibili-get-danmu-info', async (event, { cookies, roomId }: { cookies: BiliCookies, roomId: number }) => {
   try {

@@ -177,73 +177,76 @@ export default function DebugPanel({ onClose }) {
         )}
 
         {activeTab === 'stress' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
-                    警告: 压力测试可能导致软件卡顿或闪退，请谨慎使用。
+                    警告: 压力测试可能导致软件卡顿或闪退。
                 </div>
                 
-                <button 
-                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'start-flood' })}
-                    style={{ padding: '8px', backgroundColor: '#e03131', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                >
-                    开始弹幕洪流 (1000条/秒)
-                </button>
-                
-                <button 
-                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'stop-flood' })}
-                    style={{ padding: '8px', backgroundColor: '#868e96', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                    停止弹幕洪流
-                </button>
-                
-                <div style={{ height: '1px', background: '#eee', margin: '4px 0' }}></div>
-                
+                {/* 分组：压力测试 */}
+                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', marginTop: '4px' }}>性能压测</div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                        onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'start-flood' })}
+                        style={{ flex: 1, padding: '6px', backgroundColor: '#e03131', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                    >
+                        开始弹幕洪流
+                    </button>
+                    <button 
+                        onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'stop-flood' })}
+                        style={{ flex: 1, padding: '6px', backgroundColor: '#868e96', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                    >
+                        停止
+                    </button>
+                </div>
                 <button 
                     onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'flood-face' })}
-                    style={{ padding: '8px', backgroundColor: '#fd7e14', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                    style={{ padding: '6px', backgroundColor: '#fd7e14', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
                 >
                     泛洪头像缓存 (1000请求)
                 </button>
                 
-                <div style={{ height: '1px', background: '#eee', margin: '4px 0' }}></div>
-                
-                <button 
-                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-main-sync' })}
-                    style={{ padding: '8px', backgroundColor: '#000', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                    模拟主进程崩溃 (Uncaught)
-                </button>
+                {/* 分组：崩溃模拟 */}
+                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', marginTop: '8px' }}>崩溃模拟</div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button 
+                        onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-main-sync' })}
+                        style={{ flex: '1 0 45%', padding: '6px', backgroundColor: '#000', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                    >
+                        主进程 (Sync)
+                    </button>
+                    <button 
+                        onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-main-async' })}
+                        style={{ flex: '1 0 45%', padding: '6px', backgroundColor: '#343a40', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                    >
+                        主进程 (Async)
+                    </button>
+                    <button 
+                        onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-renderer' })}
+                        style={{ flex: '1 0 45%', padding: '6px', backgroundColor: '#c92a2a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                    >
+                        渲染进程
+                    </button>
+                </div>
 
-                <button 
-                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-main-async' })}
-                    style={{ padding: '8px', backgroundColor: '#343a40', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                    模拟主进程 Rejection
-                </button>
-
-                <button 
-                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-renderer' })}
-                    style={{ padding: '8px', backgroundColor: '#c92a2a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                    模拟渲染进程崩溃 (Renderer Crash)
-                </button>
-
-                <div style={{ height: '1px', background: '#eee', margin: '4px 0' }}></div>
-
+                {/* 分组：网络与异常 */}
+                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', marginTop: '8px' }}>网络与异常</div>
                 <button 
                     onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'crash-socket-hangup' })}
-                    style={{ padding: '8px', backgroundColor: '#862e9c', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                    style={{ padding: '6px', backgroundColor: '#862e9c', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
                 >
-                    验证 Socket Hang Up (修复后应弹窗)
+                    Socket Hang Up (验证不闪退)
                 </button>
-
-                <div style={{ height: '1px', background: '#eee', margin: '4px 0' }}></div>
-
                 <button 
                     onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'simulate-ws-close' })}
-                    style={{ padding: '8px', backgroundColor: '#e67700', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                    style={{ padding: '6px', backgroundColor: '#e67700', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
                 >
                     模拟 WebSocket 断线
+                </button>
+                <button 
+                    onClick={() => window.ipc.send('bilibili-debug-stress', { action: 'simulate-cookie-expired' })}
+                    style={{ padding: '6px', backgroundColor: '#1098ad', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                >
+                    模拟 Cookie 过期 (触发重连)
                 </button>
             </div>
         )}

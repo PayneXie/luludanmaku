@@ -422,7 +422,10 @@ export function GetUserInfo(cookies: BiliCookies): Promise<any> {
               mid: resp.data.mid
             })
           } else {
-            reject(new Error(resp.message || 'Failed to get user info'))
+            const error: any = new Error(resp.message || 'Failed to get user info')
+            error.code = resp.code // Attach API error code (e.g., -101 for not logged in)
+            error.data = resp.data
+            reject(error)
           }
         } catch (e) {
           reject(e)
