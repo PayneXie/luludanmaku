@@ -81,6 +81,12 @@
   box-shadow: 0 0 0 4px rgba(0, 161, 214, 0.1);
 }
 
+.input::-webkit-outer-spin-button,
+.input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 /* Selected Room Card (Inside Input Area) */
 .selectedCard {
   width: 100%;
