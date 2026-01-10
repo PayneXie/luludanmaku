@@ -711,23 +711,35 @@ export default function HomePage() {
 
     // Check if cloud sync is enabled
     if (!enableCloudSync && !customStartTime) {
-        if (!customStartTime) {
-             logToMain('info', '[CloudSync] Skipped: Feature disabled')
-             return
-        }
+        logToMain('info', '[CloudSync] Skipped: Feature disabled (enableCloudSync=false)')
+        return
     }
     
     // Auto sync check
     if (!startTime) {
-        if (!roomInfo || Number(roomInfo.room_id) !== 21013446 || roomInfo.live_status !== 1) {
-            logToMain('info', '[CloudSync] Skipped: Not in target room or not live', { roomInfo })
+        const isTargetRoom = roomInfo && Number(roomInfo.room_id) === 21013446;
+        const isLive = roomInfo && Number(roomInfo.live_status) === 1;
+
+        if (!isTargetRoom || !isLive) {
+            logToMain('info', `[CloudSync] Skipped: Condition mismatch. RoomId=${roomInfo?.room_id}, LiveStatus=${roomInfo?.live_status}`)
             return
         }
-        startTime = (roomInfo.live_start_time || 0) * 1000
+        
+        // Use live_time consistent with LiveTimer (API typically returns "YYYY-MM-DD HH:mm:ss")
+        const rawTime = roomInfo.live_time || roomInfo.live_start_time
+        if (rawTime) {
+            if (typeof rawTime === 'string') {
+                startTime = moment(rawTime).valueOf()
+            } else if (typeof rawTime === 'number') {
+                startTime = rawTime * 1000 // Assume seconds if number
+            }
+        }
+        
+        logToMain('info', `[CloudSync] Detected start time: ${rawTime} -> ${startTime}`)
     }
     
-    if (!startTime) {
-        logToMain('info', '[CloudSync] Skipped: No start time')
+    if (!startTime || isNaN(startTime)) {
+        logToMain('info', '[CloudSync] Skipped: No valid start time')
         return
     }
 
@@ -1119,14 +1131,21 @@ export default function HomePage() {
     } catch (err) {
       logToMain('error', '[CloudSync] Failed:', err)
     }
-  }, [roomInfo?.room_id, roomInfo?.live_status, roomInfo?.live_start_time])
+  }, [roomInfo?.room_id, roomInfo?.live_status, roomInfo?.live_start_time, enableCloudSync])
 
   useEffect(() => {
+    // Debug log for sync conditions (Always log to verify)
+    const statusMsg = `[CloudSync Check] RoomInfo: ${roomInfo ? 'Yes' : 'No'}, RoomId: ${roomInfo?.room_id}, LiveStatus: ${roomInfo?.live_status}, Enabled: ${enableCloudSync}`;
+    console.log(statusMsg);
+    if (window.ipc) {
+        window.ipc.send('renderer-log', 'info', statusMsg);
+    }
+
     // Strict check before starting auto-sync to avoid unnecessary logs/requests
     // 1. Must have roomInfo
     // 2. Must be target room (21013446)
     // 3. Must be live (live_status === 1)
-    if (!roomInfo || Number(roomInfo.room_id) !== 21013446 || roomInfo.live_status !== 1) {
+    if (!roomInfo || Number(roomInfo.room_id) !== 21013446 || Number(roomInfo.live_status) !== 1) {
         return
     }
 
@@ -1136,7 +1155,7 @@ export default function HomePage() {
     // Interval sync (3 minutes)
     const interval = setInterval(() => handleCloudSync(), 180000)
     return () => clearInterval(interval)
-  }, [handleCloudSync, roomInfo])
+  }, [handleCloudSync, roomInfo, enableCloudSync])
 
   useEffect(() => {
     initLogin()

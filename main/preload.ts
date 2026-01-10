@@ -10,11 +10,11 @@ try {
 }
 
 const handler = {
-  send(channel: string, value: any) {
-    ipcRenderer.send(channel, value)
+  send(channel: string, ...args: any[]) {
+    ipcRenderer.send(channel, ...args)
   },
-  invoke(channel: string, value: any) {
-    return ipcRenderer.invoke(channel, value)
+  invoke(channel: string, ...args: any[]) {
+    return ipcRenderer.invoke(channel, ...args)
   },
   on(channel: string, callback: (event: IpcRendererEvent, ...args: any[]) => void) {
     const subscription = (_event: IpcRendererEvent, ...args: any[]) => callback(_event, ...args)
