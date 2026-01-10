@@ -531,7 +531,14 @@ export default function HomePage() {
       
       const savedHistory = localStorage.getItem('roomHistory')
       if (savedHistory) {
-          setRoomHistory(JSON.parse(savedHistory))
+          const parsed = JSON.parse(savedHistory)
+          setRoomHistory(parsed)
+          // 自动填入最近一次的直播间 ID
+          if (parsed.length > 0) {
+              const last = parsed[0]
+              const lastId = typeof last === 'object' ? String(last.room_id) : String(last)
+              setRoomId(lastId)
+          }
       } else {
           setRoomHistory(['21013446'])
       }
@@ -545,9 +552,31 @@ export default function HomePage() {
       return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
   
-  const saveToHistory = (id) => {
+  const saveToHistory = (roomInfo) => {
+      if (!roomInfo) return
+      // roomInfo 可能是纯 ID 字符串（旧数据或简单调用）或对象
+      const id = typeof roomInfo === 'object' ? String(roomInfo.room_id) : String(roomInfo)
       if (!id) return
-      let newHistory = [id, ...roomHistory.filter(h => h !== id)]
+
+      let newHistory = roomHistory.filter(h => {
+          const hId = typeof h === 'object' ? String(h.room_id) : String(h)
+          return hId !== id
+      })
+      
+      // 如果是对象，直接存；如果是 ID，尝试保留旧的对象信息（如果存在），否则存 ID
+      let newItem = roomInfo
+      if (typeof roomInfo !== 'object') {
+          // 查找旧数据中是否有此 ID 的详细信息
+          const oldItem = roomHistory.find(h => {
+              const hId = typeof h === 'object' ? String(h.room_id) : String(h)
+              return hId === id
+          })
+          if (oldItem && typeof oldItem === 'object') {
+              newItem = oldItem
+          }
+      }
+
+      newHistory = [newItem, ...newHistory]
       newHistory = newHistory.slice(0, 10)
       setRoomHistory(newHistory)
       localStorage.setItem('roomHistory', JSON.stringify(newHistory))
@@ -555,7 +584,10 @@ export default function HomePage() {
   
   const deleteHistory = (e, id) => {
       e.stopPropagation()
-      const newHistory = roomHistory.filter(h => h !== id)
+      const newHistory = roomHistory.filter(h => {
+          const hId = typeof h === 'object' ? String(h.room_id) : String(h)
+          return hId !== String(id)
+      })
       setRoomHistory(newHistory)
       localStorage.setItem('roomHistory', JSON.stringify(newHistory))
   }
@@ -1475,6 +1507,7 @@ export default function HomePage() {
         connectDanmu={connectDanmu} 
         danmuStatus={danmuStatus} 
         roomHistory={roomHistory} 
+        saveToHistory={saveToHistory}
         setShowHistoryDropdown={setShowHistoryDropdown} 
         showHistoryDropdown={showHistoryDropdown} 
         deleteHistory={deleteHistory} 

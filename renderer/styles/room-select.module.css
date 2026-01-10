@@ -10,20 +10,26 @@
 
 .card {
   background: white;
-  padding: 40px;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
-  width: 400px;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  width: 420px;
   text-align: center;
+  padding: 48px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  transition: all 0.3s ease;
 }
 
 .header {
-  margin-bottom: 30px;
+  margin-bottom: 32px;
+  width: 100%;
 }
 
 .welcome {
-  font-size: 18px;
-  color: #495057;
+  font-size: 15px;
+  color: #6c757d;
   margin-bottom: 8px;
 }
 
@@ -37,13 +43,16 @@
   font-weight: 700;
   color: #212529;
   margin: 0;
+  letter-spacing: -0.5px;
 }
 
 .formGroup {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  margin-bottom: 24px;
+  width: 100%;
+  position: relative;
+  z-index: 10;
 }
 
 .inputWrapper {
@@ -53,46 +62,129 @@
 
 .input {
   width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
+  padding: 14px 16px;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
   font-size: 16px;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  -moz-appearance: textfield; /* Firefox */
+  transition: all 0.2s;
+  -moz-appearance: textfield;
   box-sizing: border-box;
-}
-
-.input::-webkit-outer-spin-button,
-.input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+  background: #f8f9fa;
+  text-align: center;
+  font-weight: 500;
 }
 
 .input:focus {
   border-color: #00a1d6;
-  box-shadow: 0 0 0 3px rgba(0, 161, 214, 0.1);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(0, 161, 214, 0.1);
 }
 
+/* Selected Room Card (Inside Input Area) */
+.selectedCard {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #00a1d6;
+  border-radius: 12px;
+  background-color: #f0faff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cardInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  padding-left: 4px;
+}
+
+.cardAvatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.cardText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  overflow: hidden;
+}
+
+.cardName {
+  font-size: 15px;
+  font-weight: bold;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.cardId {
+  font-size: 12px;
+  color: #666;
+}
+
+.cardClose {
+  cursor: pointer;
+  padding: 6px;
+  color: #adb5bd;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  margin-right: 4px;
+}
+
+.cardClose:hover {
+  background-color: rgba(255,255,255,0.5);
+  color: #ff4d4f;
+}
+
+/* Dropdown */
 .dropdown {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
   background: white;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  margin-top: 4px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  margin-top: 8px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
   z-index: 100;
   max-height: 200px;
   overflow-y: auto;
   text-align: left;
+  animation: slideDown 0.2s ease-out;
+  padding: 4px;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .dropdownItem {
-  padding: 10px 16px;
+  padding: 10px 12px;
   cursor: pointer;
+  border-radius: 8px;
   font-size: 14px;
   color: #495057;
   transition: background-color 0.1s;
@@ -102,56 +194,73 @@
 }
 
 .dropdownItem:hover {
-  background-color: #f8f9fa;
+  background-color: #f1f3f5;
   color: #00a1d6;
 }
 
-.deleteBtn {
-    color: #adb5bd;
-    cursor: pointer;
-    font-size: 16px;
-    line-height: 1;
-    padding: 2px 6px;
-    border-radius: 4px;
+.dropdownLoading {
+  padding: 16px;
+  text-align: center;
+  color: #adb5bd;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
-.deleteBtn:hover {
-    color: #fa5252;
-    background-color: rgba(250, 82, 82, 0.1);
+
+.loadingSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #00a1d6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .btnConnect {
   width: 100%;
-  background-color: #00a1d6;
+  background: linear-gradient(135deg, #00a1d6 0%, #00b5e5 100%);
   color: white;
   border: none;
-  padding: 12px 24px;
-  border-radius: 6px;
+  padding: 14px 24px;
+  border-radius: 12px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 161, 214, 0.2);
 }
 
 .btnConnect:hover {
-  background-color: #00b5e5;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 161, 214, 0.3);
+  filter: brightness(1.05);
 }
 
 .btnConnect:active {
   transform: translateY(1px);
+  box-shadow: 0 2px 6px rgba(0, 161, 214, 0.2);
 }
 
 .btnConnect:disabled {
-  background-color: #e9ecef;
+  background: #e9ecef;
   color: #adb5bd;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 .status {
-  min-height: 24px;
-  font-size: 14px;
-  margin-top: 10px;
-  color: #868e96;
+  min-height: 20px;
+  font-size: 13px;
+  margin-top: 12px;
+  color: #adb5bd;
 }
 
 .statusError {
@@ -159,16 +268,111 @@
 }
 
 .btnLogout {
-  margin-top: 30px;
+  position: absolute;
+  top: 20px;
+  right: 20px;
   background: none;
   border: none;
-  color: #868e96;
-  font-size: 14px;
+  color: #adb5bd;
+  font-size: 13px;
   cursor: pointer;
-  text-decoration: underline;
   transition: color 0.2s;
 }
 
 .btnLogout:hover {
   color: #495057;
+  text-decoration: underline;
+}
+
+/* History Capsules */
+.historySection {
+    margin-top: 32px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.historyLabel {
+    font-size: 12px;
+    color: #adb5bd;
+    margin-bottom: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.historyList {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.historyCapsule {
+    display: flex;
+    align-items: center;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 50px;
+    padding: 4px 12px 4px 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    max-width: 160px;
+    position: relative;
+}
+
+.historyCapsule:hover {
+    background: white;
+    border-color: #00a1d6;
+    box-shadow: 0 4px 12px rgba(0, 161, 214, 0.15);
+    transform: translateY(-2px);
+}
+
+.historyAvatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 8px;
+    border: 1px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.historyName {
+    font-size: 13px;
+    color: #495057;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+}
+
+.historyCapsule:hover .historyName {
+    color: #00a1d6;
+}
+
+/* Delete button on capsule (visible on hover) */
+.historyDelete {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.1);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    font-size: 10px;
+    opacity: 0;
+    transition: all 0.2s;
+}
+
+.historyCapsule:hover .historyDelete {
+    opacity: 1;
+}
+
+.historyDelete:hover {
+    background: #ff4d4f;
 }

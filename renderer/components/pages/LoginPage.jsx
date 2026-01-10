@@ -23,11 +23,11 @@ const LoginPage = ({ qrImage, status, onRefresh }) => {
                flexDirection: 'column', 
                height: 'calc(100vh - 8px)', 
                margin: '4px',
-               background: '#fff',
+               background: 'linear-gradient(135deg, #f0f7fd 0%, #fdfbfd 100%)',
                borderRadius: '6px',
                overflow: 'hidden',
-               border: '1px solid rgba(0,0,0,0.06)',
-               boxShadow: '0 0 6px 0 rgba(0,0,0,0.3)',
+               border: '1px solid rgba(255,255,255,0.3)',
+               boxShadow: '0 0 12px 0 rgba(0,0,0,0.1)',
                position: 'relative'
            }}>
             <TitleBar title="登录 - Luludanmaku" />
