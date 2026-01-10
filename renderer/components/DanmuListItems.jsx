@@ -23,8 +23,23 @@ const getMedalColor = (level) => {
     return '#61c05a' // 默认
 }
 
+// 辅助函数：将整数颜色转换为 Hex 字符串
+const intToHexColor = (num) => {
+    if (num === null || num === undefined) return null
+    return `#${num.toString(16).padStart(6, '0')}`
+}
+
+// 智能获取勋章颜色：优先使用服务端返回的 medal_color_end，否则回退到等级颜色
+const getSmartMedalColor = (medalInfo) => {
+    if (!medalInfo) return '#61c05a'
+    if (medalInfo.medal_color_end) {
+        return intToHexColor(medalInfo.medal_color_end)
+    }
+    return getMedalColor(medalInfo.medal_level)
+}
+
 // 提取的 Memoized 弹幕组件
-export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onUserClick, onToggleRead }) => {
+export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onUserClick, onToggleRead, style, variant = 'default' }) => {
     // 即使是普通弹幕，我们也尝试用 hook 优化头像（虽然普通弹幕目前没有头像显示，但如果未来加了头像可以用）
     // 目前 DanmuItem 只有文字，没有头像，所以这里暂时不用 hook。
     // 如果你想给普通弹幕也加头像，可以在这里用。
@@ -47,9 +62,19 @@ export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onU
 
         // 用户名颜色区分
         let unameColor = '#333' // 普通用户黑色
-        if (guardLevel === 3) unameColor = '#00a1d6' // 舰长 (蓝色)
-        if (guardLevel === 2) unameColor = '#E040FB' // 提督 (紫色)
-        if (guardLevel === 1) unameColor = '#FF3232' // 总督 (红色)
+        
+        if (variant === 'overlay') {
+             // Overlay 模式下的颜色 (更亮，适合深色/透明背景)
+             unameColor = isGuard ? '#ff7f9e' : (msg.sender.is_vip || msg.sender.is_svip ? '#fb7299' : '#00a1d6')
+             if (!isGuard && !msg.sender.is_vip && !msg.sender.is_svip) {
+                 unameColor = '#fff' // 普通用户白色
+             }
+        } else {
+             // 默认模式
+             if (guardLevel === 3) unameColor = '#00a1d6' // 舰长 (蓝色)
+             if (guardLevel === 2) unameColor = '#E040FB' // 提督 (紫色)
+             if (guardLevel === 1) unameColor = '#FF3232' // 总督 (红色)
+        }
         
         const isRead = readMessages.has(item.id)
         const readStyle = isRead ? { filter: 'grayscale(100%)', opacity: 0.6 } : {}
@@ -57,7 +82,7 @@ export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onU
         return (
           <div 
               className={styles['danmu-item']}
-              style={{ backgroundColor: bgColor, display: 'flex', flexWrap: 'wrap', alignItems: 'center', ...readStyle }}
+              style={{ backgroundColor: bgColor, display: 'flex', flexWrap: 'wrap', alignItems: 'center', ...readStyle, ...style }}
           >
               {/* 头部容器 (勋章+舰长图标+用户名) 整体不换行 */}
               <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', marginRight: '4px' }}>
@@ -66,12 +91,12 @@ export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onU
                       <span 
                         className={styles['medal-badge']}
                         style={{
-                          borderColor: getMedalColor(msg.sender.medal_info.medal_level),
-                          backgroundColor: getMedalColor(msg.sender.medal_info.medal_level),
+                          borderColor: getSmartMedalColor(msg.sender.medal_info),
+                          backgroundColor: getSmartMedalColor(msg.sender.medal_info),
                           backgroundImage: 'none'
                         }}
                       >
-                          {msg.sender.medal_info.medal_name}|{msg.sender.medal_info.medal_level}
+                          {msg.sender.medal_info.medal_name.replace(/\|.*/, '')} <span style={{ fontWeight: '900' }}>{msg.sender.medal_info.medal_level}</span>
                       </span>
                   )}
                   
@@ -187,6 +212,7 @@ export const ScItem = React.memo(({ item, readMessages, onUserClick, onToggleRea
               <img 
                   src={currentFace} 
                   alt="face" 
+                  referrerPolicy="no-referrer"
                   style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '6px', verticalAlign: 'middle', cursor: 'pointer' }} 
                   onClick={(e) => onUserClick(e, msg.sender)}
                   data-user-action-trigger="true"
@@ -197,18 +223,18 @@ export const ScItem = React.memo(({ item, readMessages, onUserClick, onToggleRea
                   <span 
                     className={styles['medal-badge']}
                     style={{
-                      borderColor: getMedalColor(msg.sender.medal_info.medal_level),
-                      backgroundColor: getMedalColor(msg.sender.medal_info.medal_level),
+                      borderColor: getSmartMedalColor(msg.sender.medal_info),
+                      backgroundColor: getSmartMedalColor(msg.sender.medal_info),
                       backgroundImage: 'none',
                       marginRight: '6px',
                       transform: 'none',
-                      lineHeight: '14px',
+                      lineHeight: '18px',
                       display: 'flex',
                       alignItems: 'center',
-                      height: '16px'
+                      height: '18px'
                     }}
                   >
-                      {msg.sender.medal_info.medal_name}|{msg.sender.medal_info.medal_level}
+                      {msg.sender.medal_info.medal_name.replace(/\|.*/, '')} <span style={{ fontWeight: '900', marginLeft: '4px' }}>{msg.sender.medal_info.medal_level}</span>
                   </span>
               )}
 
@@ -362,14 +388,14 @@ export const GiftItem = React.memo(({ item, readMessages, onUserClick, onToggleR
                          <span 
                            className={styles['medal-badge']}
                            style={{
-                             borderColor: getMedalColor(msg.sender.medal_info.medal_level),
-                             backgroundColor: getMedalColor(msg.sender.medal_info.medal_level),
+                             borderColor: getSmartMedalColor(msg.sender.medal_info),
+                             backgroundColor: getSmartMedalColor(msg.sender.medal_info),
                              backgroundImage: 'none',
                              marginRight: '6px',
                              whiteSpace: 'nowrap'
                            }}
                          >
-                             {msg.sender.medal_info.medal_name}|{msg.sender.medal_info.medal_level}
+                             {msg.sender.medal_info.medal_name.replace(/\|.*/, '')} <span style={{ fontWeight: '900' }}>{msg.sender.medal_info.medal_level}</span>
                          </span>
                      )}
                      

@@ -410,8 +410,8 @@ if (isProd) {
     log.info('UserData:', app.getPath('userData'));
 
   const mainWindow = createWindow('main', {
-    width: 1000,
-    height: 600,
+    width: 1080,
+    height: 650,
     frame: false, // Frameless for custom UI and transparent mode
     transparent: true, // Allow transparency
     backgroundColor: '#00000000',

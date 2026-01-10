@@ -200,9 +200,9 @@
 /* Medals */
 .medal-badge {
   display: inline-block;
-  font-size: 11px;
-  line-height: 16px;
-  padding: 0 6px;
+  font-size: 12px; /* Increased from 11px */
+  line-height: 18px; /* Increased from 16px */
+  padding: 0 7px; /* Increased padding */
   border-radius: 10px; /* Rounded pill shape */
   margin-right: 6px;
   vertical-align: middle;
