@@ -238,7 +238,7 @@ export default function HomePage() {
   const [giftMap, setGiftMap] = useState({}) 
   // 礼物过滤器
   const [minGiftPrice, setMinGiftPrice] = useState(0.1) // RMB
-  const [enableCloudSync, setEnableCloudSync] = useState(false) // 是否开启云同步
+  const [enableCloudSync, setEnableCloudSync] = useState(true) // 是否开启云同步
   const [showGiftSettings, setShowGiftSettings] = useState(false)
   
   // 弹幕过滤器
