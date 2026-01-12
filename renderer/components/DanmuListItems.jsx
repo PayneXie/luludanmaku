@@ -1,9 +1,9 @@
 import React from 'react'
 import styles from '@/styles/console.module.css'
 import Linkify from '@/components/Linkify'
-import level1 from '../public/images/level1.png'
-import level2 from '../public/images/level2.png'
-import level3 from '../public/images/level3.png'
+import level1 from '../public/images/v2-level1.png'
+import level2 from '../public/images/v2-level2.png'
+import level3 from '../public/images/v2-level3.png'
 import { useUserFace } from '../hooks/useUserFace'
 
 // 安全获取图标 URL 的辅助函数
@@ -85,7 +85,7 @@ export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onU
               style={{ backgroundColor: bgColor, display: 'flex', flexWrap: 'wrap', alignItems: 'center', ...readStyle, ...style }}
           >
               {/* 头部容器 (勋章+舰长图标+用户名) 整体不换行 */}
-              <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', marginRight: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', marginRight: '0' }}>
                   {/* 勋章 */}
                   {msg.sender.medal_info && msg.sender.medal_info.is_lighted === 1 && (
                       <span 
@@ -93,17 +93,34 @@ export const DanmuItem = React.memo(({ item, highlightedUsers, readMessages, onU
                         style={{
                           borderColor: getSmartMedalColor(msg.sender.medal_info),
                           backgroundColor: getSmartMedalColor(msg.sender.medal_info),
-                          backgroundImage: 'none'
+                          backgroundImage: 'none',
+                          paddingLeft: isGuard ? 0 : undefined,
+                          paddingRight: isGuard ? '6px' : undefined,
+                          display: 'inline-flex',
+                          alignItems: 'center'
                         }}
                       >
-                          {msg.sender.medal_info.medal_name.replace(/\|.*/, '')} <span style={{ fontWeight: '900' }}>{msg.sender.medal_info.medal_level}</span>
+                          {isGuard && (
+                              <img 
+                                  src={getGuardIcon(guardLevel)}
+                                  alt="guard"
+                                  style={{
+                                      width: '20px',
+                                      height: '20px',
+                                      borderRadius: '50%',
+                                      marginRight: '3px',
+                                      objectFit: 'contain'
+                                  }}
+                              />
+                          )}
+                          {msg.sender.medal_info.medal_name.replace(/\|.*/, '')} <span style={{ fontWeight: '900', marginLeft: '2px' }}>{msg.sender.medal_info.medal_level}</span>
                       </span>
                   )}
                   
-                  {/* 舰长图标 */}
-                  {isGuard && (
+                  {/* 舰长图标 (Fallback) */}
+                  {isGuard && (!msg.sender.medal_info || msg.sender.medal_info.is_lighted !== 1) && (
                       <img 
-                          src={getGuardIcon(msg.sender.medal_info.guard_level)}
+                          src={getGuardIcon(guardLevel)}
                           className={styles['guard-icon']}
                           alt="guard"
                       />

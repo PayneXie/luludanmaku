@@ -1,3 +1,10 @@
+# env
+.env
+.env.local
+.env.*
+renderer/.env
+renderer/.env.*
+
 # dependencies
 node_modules
 
