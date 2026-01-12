@@ -18,6 +18,7 @@
 
 - **[JLiverTool](https://github.com/Xinrea/JLiverTool)**: 本项目的 UI 布局与交互逻辑深受 JLiverTool 启发，感谢原作者优秀的界面设计思路。
 - **[bilibili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect)**: 感谢该项目提供的详尽 Bilibili 文档，为底层通信实现提供了坚实基础。
+- **[blivechat](https://github.com/xfgryujk/blivechat)**: 感谢该项目提供的头像获取策略，以及弹幕样式启发。
 
 
 
@@ -33,7 +34,7 @@
 
 ### 2. 主控制台 (Main Console)
 
-![screenshot](renderer\public\screenshots\console.png)
+![screenshot](renderer/public/screenshots/console.png)
 
 
 核心界面采用 **三栏式布局**，从左到右分别为：
@@ -58,7 +59,7 @@
 
 ### 4. OBS 推流 (Overlay)
 
-![screenshot](renderer\public\screenshots\obs.png)
+![screenshot](renderer/public/screenshots/obs.png)
 
 无需使用「窗口捕获」，Luludanmaku 内置了推流服务。
 
@@ -116,5 +117,6 @@ npm run build
 本项目在开发过程中参考了以下优秀的开源项目，向它们致敬：
 
 - **[JLiverTool](https://github.com/Xinrea/JLiverTool)**: 本项目的 UI 布局与交互逻辑深受 JLiverTool 启发，感谢原作者优秀的界面设计思路。
+- **[blivechat](https://github.com/xfgryujk/blivechat)**: 感谢该项目提供的头像获取策略，以及弹幕样式启发。
 - **[bilibili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect)**: 感谢该项目提供的详尽 Bilibili 直播协议文档，为底层通信实现提供了坚实基础。
 
