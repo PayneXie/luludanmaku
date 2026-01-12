@@ -52,13 +52,9 @@ jobs:
         run: npm ci
 
       - name: Build Nextron App
-        run: npm run build
-
-      - name: Package Electron App (Windows)
-        if: matrix.os == 'windows-latest'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --x64
+        run: npm run build
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
