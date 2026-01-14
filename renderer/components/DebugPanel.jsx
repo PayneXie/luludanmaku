@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 
 export default function DebugPanel({ onClose, onManualSync }) {
   const [activeTab, setActiveTab] = useState('danmu')
+  const [vtsStatus, setVtsStatus] = useState('Disconnected')
   const [position, setPosition] = useState({ x: window.innerWidth - 320, y: window.innerHeight - 400 })
   const [isDragging, setIsDragging] = useState(false)
   const dragStartRef = useRef({ x: 0, y: 0 })
@@ -87,6 +88,21 @@ export default function DebugPanel({ onClose, onManualSync }) {
     }
   }, [isDragging])
 
+  useEffect(() => {
+    // Get initial VTS status
+    window.ipc.invoke('vts-get-status').then(setVtsStatus)
+
+    // Listen for status updates
+    // window.ipc.on returns a cleanup function (unsubscribe)
+    const unsubscribe = window.ipc.on('vts-status', (event, status) => {
+        setVtsStatus(status)
+    })
+    
+    return () => {
+        unsubscribe()
+    }
+  }, [])
+
   return (
     <div 
       ref={panelRef}
@@ -129,7 +145,7 @@ export default function DebugPanel({ onClose, onManualSync }) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #eee' }}>
-        {['danmu', 'sc', 'gift', 'guard', 'stress'].map(tab => (
+        {['danmu', 'sc', 'gift', 'guard', 'vts', 'stress'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -144,7 +160,7 @@ export default function DebugPanel({ onClose, onManualSync }) {
               fontSize: tab === 'stress' ? '12px' : '14px'
             }}
           >
-            {tab === 'danmu' ? '弹幕' : tab === 'sc' ? 'SC' : tab === 'gift' ? '礼物' : tab === 'guard' ? '上舰' : '压测'}
+            {tab === 'danmu' ? '弹幕' : tab === 'sc' ? 'SC' : tab === 'gift' ? '礼物' : tab === 'guard' ? '上舰' : tab === 'vts' ? 'VTS' : '压测'}
           </button>
         ))}
       </div>
@@ -153,7 +169,7 @@ export default function DebugPanel({ onClose, onManualSync }) {
       <div style={{ padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         
         {/* Common: Username & UID (Hide for stress test) */}
-        {activeTab !== 'stress' && (
+        {activeTab !== 'stress' && activeTab !== 'vts' && (
         <div style={{ display: 'flex', gap: '10px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 2, minWidth: 0 }}>
                 <label style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>用户名</label>
@@ -381,6 +397,62 @@ export default function DebugPanel({ onClose, onManualSync }) {
             </>
         )}
 
+        {activeTab === 'vts' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                    VTube Studio 连接控制 (172.16.2.16:8001)
+                </div>
+                <div style={{ 
+                    padding: '8px', 
+                    borderRadius: '4px', 
+                    backgroundColor: vtsStatus === 'Authenticated' ? '#d3f9d8' : vtsStatus === 'Connected' ? '#fff3bf' : '#ffe3e3',
+                    color: vtsStatus === 'Authenticated' ? '#2b8a3e' : vtsStatus === 'Connected' ? '#f08c00' : '#c92a2a',
+                    textAlign: 'center',
+                    fontWeight: 'bold'
+                }}>
+                    状态: {vtsStatus}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                        onClick={() => window.ipc.send('vts-connect')}
+                        style={{ flex: 1, padding: '8px', backgroundColor: '#228be6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        disabled={vtsStatus === 'Connected' || vtsStatus === 'Authenticated'}
+                    >
+                        连接
+                    </button>
+                    <button 
+                        onClick={() => window.ipc.send('vts-disconnect')}
+                        style={{ flex: 1, padding: '8px', backgroundColor: '#fa5252', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        disabled={vtsStatus === 'Disconnected'}
+                    >
+                        断开
+                    </button>
+                </div>
+                <div style={{ fontSize: '11px', color: '#999' }}>
+                    * 首次连接需要在 VTS 中允许插件访问。<br/>
+                    * 仅当状态为 "Authenticated" 时功能可用。
+                </div>
+
+                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', marginTop: '4px' }}>测试物品 (可乐)</div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                        onClick={() => window.ipc.send('vts-test-item', true)}
+                        style={{ flex: 1, padding: '8px', backgroundColor: '#12b886', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        disabled={vtsStatus !== 'Authenticated'}
+                    >
+                        显示
+                    </button>
+                    <button 
+                        onClick={() => window.ipc.send('vts-test-item', false)}
+                        style={{ flex: 1, padding: '8px', backgroundColor: '#868e96', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        disabled={vtsStatus !== 'Authenticated'}
+                    >
+                        消失
+                    </button>
+                </div>
+            </div>
+        )}
+
         <button 
             onClick={handleSend}
             style={{ 
@@ -391,7 +463,8 @@ export default function DebugPanel({ onClose, onManualSync }) {
                 border: 'none', 
                 borderRadius: '4px', 
                 cursor: 'pointer',
-                fontWeight: 'bold'
+                fontWeight: 'bold',
+                display: activeTab === 'vts' || activeTab === 'stress' ? 'none' : 'block'
             }}
         >
             发送 {activeTab === 'danmu' ? '弹幕' : activeTab === 'sc' ? 'SC' : activeTab === 'gift' ? '礼物' : '上舰'}

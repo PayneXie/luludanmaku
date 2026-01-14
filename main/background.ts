@@ -86,6 +86,7 @@ import { avatarFetcher } from './lib/avatar_fetcher'
 import { avatarDb } from './lib/db'
 import { BiliWebSocket, WsInfo, PackResult } from './lib/bilibili_socket'
 import { initOverlayServer, broadcastToOverlay, closeOverlayServer } from './lib/overlay_server'
+import { vtsController } from './lib/vts_controller'
 import fs from 'fs-extra'
 import { LRUCache } from 'lru-cache'
 
@@ -1318,4 +1319,21 @@ ipcMain.on('open-tools-window', () => {
         const port = process.argv[2]
         toolsWindow.loadURL(`http://localhost:${port}/tools`)
     }
+})
+
+// VTS IPC
+ipcMain.on('vts-connect', () => {
+    vtsController.connect()
+})
+
+ipcMain.on('vts-disconnect', () => {
+    vtsController.disconnect()
+})
+
+ipcMain.handle('vts-get-status', () => {
+    return vtsController.getStatus()
+})
+
+ipcMain.on('vts-test-item', (event, show) => {
+    vtsController.triggerTestItem(show)
 })
